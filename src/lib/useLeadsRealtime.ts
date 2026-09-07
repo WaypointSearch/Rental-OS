@@ -12,9 +12,9 @@ interface UseLeadsRealtimeOptions {
 }
 
 /**
- * Subscribes to real-time INSERT / UPDATE / DELETE events on the `leads` table.
- * When your Google Apps Script upserts a lead, it will appear/update live
- * in every connected agent's browser without a page refresh.
+ * Keeps the broker's full pipeline live while keeping an agent's rendered view
+ * limited to leads currently assigned to that agent. If a broker reassigns a
+ * lead away, the update removes it from the agent's board immediately.
  */
 export function useLeadsRealtime({
   onInsert,
@@ -25,35 +25,60 @@ export function useLeadsRealtime({
 
   useEffect(() => {
     const supabase = getSupabase()
+    let cancelled = false
 
-    channelRef.current = supabase
-      .channel('leads-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'leads' },
-        (payload) => {
-          onInsert(payload.new as Lead)
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'leads' },
-        (payload) => {
-          onUpdate(payload.new as Lead)
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'leads' },
-        (payload) => {
-          onDelete((payload.old as { id: string }).id)
-        }
-      )
-      .subscribe()
+    async function subscribe() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (cancelled || !user) return
+
+      const email = user.email ?? ''
+      const { data: profile } = await supabase
+        .from('agent_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (cancelled) return
+      const isAdmin = profile?.is_admin === true
+      const canSee = (lead: Lead) => isAdmin || lead.assigned_agent === email
+
+      channelRef.current = supabase
+        .channel(`leads-realtime-${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'leads' },
+          payload => {
+            const lead = payload.new as Lead
+            if (canSee(lead)) onInsert(lead)
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'leads' },
+          payload => {
+            const lead = payload.new as Lead
+            if (canSee(lead)) onUpdate(lead)
+            else onDelete(lead.id)
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'leads' },
+          payload => {
+            const id = (payload.old as { id?: string }).id
+            if (id) onDelete(id)
+          },
+        )
+        .subscribe()
+    }
+
+    void subscribe()
 
     return () => {
+      cancelled = true
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+        void supabase.removeChannel(channelRef.current)
+        channelRef.current = null
       }
     }
   }, [onInsert, onUpdate, onDelete])
