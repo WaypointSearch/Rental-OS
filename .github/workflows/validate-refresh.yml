@@ -1,0 +1,40 @@
+name: Validate Rental OS
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - rental-os-wow-refresh
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npx tsc --noEmit --pretty false
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: test-service-key
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          RESEND_API_KEY: re_test_placeholder
+          ADMIN_EMAIL: test@example.com
+          WEBHOOK_SECRET: test-secret

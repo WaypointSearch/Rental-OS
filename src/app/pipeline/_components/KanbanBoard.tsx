@@ -1,18 +1,38 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  DndContext, DragEndEvent, DragOverEvent, DragStartEvent,
-  PointerSensor, useSensor, useSensors, DragOverlay, closestCorners,
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  useSensor,
+  useSensors,
 } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
+import {
+  Download,
+  LayoutGrid,
+  List,
+  LogOut,
+  Moon,
+  Plus,
+  ShieldCheck,
+  Sun,
+  UserRound,
+  UsersRound,
+} from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Lead, STAGES } from '@/types/lead'
 import { AgentProfile } from '@/types/agent'
 import { StageColumn } from './StageColumn'
 import { LeadPanel } from './LeadPanel'
 import { LeadCard } from './LeadCard'
 import { ListView } from './ListView'
-import { StatsBar } from './StatsBar'
+import { FocusKey, StatsBar } from './StatsBar'
 import { FilterBar } from './FilterBar'
 import { LeadCreateModal } from './LeadCreateModal'
 import { DispatchModal } from './DispatchModal'
@@ -21,7 +41,6 @@ import { useLeadFilter } from '@/lib/useLeadFilter'
 import { useToast, ToastProvider } from '@/lib/useToast'
 import { exportLeadsToCSV } from '@/lib/exportCSV'
 import { getSupabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -32,153 +51,219 @@ interface KanbanBoardProps {
   agentAvatarMap: Record<string, string | null>
 }
 
+function isUnassigned(lead: Lead) {
+  return !lead.assigned_agent || lead.assigned_agent === 'Unassigned'
+}
+
+function isStale(lead: Lead) {
+  if (lead.stage === 'Move in / Deposit') return false
+  return (Date.now() - new Date(lead.created_at).getTime()) / 86_400_000 > 10
+}
+
+function closedThisMonth(lead: Lead) {
+  if (lead.stage !== 'Move in / Deposit') return false
+  const d = new Date(lead.created_at)
+  const now = new Date()
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+}
+
 function BoardInner({
-  initialLeads, agentEmail, agentId, isAdmin, agentProfile, agentAvatarMap: initAvatarMap,
+  initialLeads,
+  agentEmail,
+  agentId: _agentId,
+  isAdmin,
+  agentProfile,
+  agentAvatarMap: initAvatarMap,
 }: KanbanBoardProps) {
   const supabase = getSupabase()
-  const router   = useRouter()
+  const router = useRouter()
   const { push: toast } = useToast()
 
-  const [leads,       setLeads]       = useState<Lead[]>(initialLeads)
-  const [selected,    setSelected]    = useState<Lead | null>(null)
-  const [activeId,    setActiveId]    = useState<string | null>(null)
-  const [showCreate,  setShowCreate]  = useState(false)
-  const [viewMode,    setViewMode]    = useState<'kanban' | 'list'>('kanban')
-  const [avatarMap,   setAvatarMap]   = useState(initAvatarMap)
-  const [isMobile,    setIsMobile]    = useState(false)
-  // Dispatch modal state (admin-only)
+  const [leads, setLeads] = useState<Lead[]>(initialLeads)
+  const [selected, setSelected] = useState<Lead | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [focus, setFocus] = useState<FocusKey>('all')
+  const [avatarMap, setAvatarMap] = useState(initAvatarMap)
+  const [isMobile, setIsMobile] = useState(false)
+  const [lightTheme, setLightTheme] = useState(false)
   const [dispatchLead, setDispatchLead] = useState<Lead | null>(null)
-  const [allAgents,    setAllAgents]    = useState<AgentProfile[]>([])
+  const [allAgents, setAllAgents] = useState<AgentProfile[]>([])
 
-  // Detect mobile + auto-switch to list view
   useEffect(() => {
     const check = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
-      if (mobile && viewMode === 'kanban') setViewMode('list')
+      if (mobile) setViewMode('list')
     }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
-  }, []) // eslint-disable-line
+  }, [])
 
-  // Lazy-load agents when dispatch modal needs them (admin only)
+  useEffect(() => {
+    const saved = window.localStorage.getItem('rental-os-theme')
+    const light = saved === 'light'
+    setLightTheme(light)
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark')
+  }, [])
+
+  function toggleTheme() {
+    const next = !lightTheme
+    setLightTheme(next)
+    document.documentElement.setAttribute('data-theme', next ? 'light' : 'dark')
+    window.localStorage.setItem('rental-os-theme', next ? 'light' : 'dark')
+  }
+
   async function openDispatch(lead: Lead) {
     if (!isAdmin) return
     if (allAgents.length === 0) {
-      const { data } = await supabase
-        .from('agent_profiles').select('*').order('created_at')
+      const { data } = await supabase.from('agent_profiles').select('*').order('created_at')
       if (data) setAllAgents(data as AgentProfile[])
     }
     setDispatchLead(lead)
-    setSelected(null)  // close panel while dispatch modal is open
+    setSelected(null)
   }
 
-  // ── Realtime ─────────────────────────────────────────────────────────────
   const handleInsert = useCallback((lead: Lead) => {
-    setLeads(p => p.find(l => l.id === lead.id) ? p : [lead, ...p])
-    toast({
-      type: 'lead',
-      title: 'New lead arrived',
-      body: `${lead.name ?? lead.id}`,
-      duration: 8000,
-    })
-    // Auto-open dispatch if admin and lead is unassigned
-    if (isAdmin && (!lead.assigned_agent || lead.assigned_agent === 'Unassigned')) {
-      openDispatch(lead)
-    }
-  }, [toast, isAdmin]) // eslint-disable-line
+    setLeads(previous => previous.find(item => item.id === lead.id) ? previous : [lead, ...previous])
+    toast({ type: 'lead', title: 'New lead arrived', body: `${lead.name ?? lead.id}`, duration: 8000 })
+    if (isAdmin && isUnassigned(lead)) openDispatch(lead)
+  }, [toast, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpdate = useCallback((lead: Lead) => {
-    setLeads(p => p.map(l => l.id === lead.id ? lead : l))
-    setSelected(p => p?.id === lead.id ? lead : p)
-    // Update avatar map if agent profile changed
-    if (lead.assigned_agent) {
-      setAvatarMap(p => ({ ...p })) // trigger re-render; full refresh handled by pipeline page
-    }
+    setLeads(previous => previous.map(item => item.id === lead.id ? lead : item))
+    setSelected(previous => previous?.id === lead.id ? lead : previous)
+    if (lead.assigned_agent) setAvatarMap(previous => ({ ...previous }))
   }, [])
 
   const handleDelete = useCallback((id: string) => {
-    setLeads(p => p.filter(l => l.id !== id))
-    setSelected(p => p?.id === id ? null : p)
+    setLeads(previous => previous.filter(lead => lead.id !== id))
+    setSelected(previous => previous?.id === id ? null : previous)
   }, [])
 
   useLeadsRealtime({ onInsert: handleInsert, onUpdate: handleUpdate, onDelete: handleDelete })
 
-  // ── Filter ────────────────────────────────────────────────────────────────
-  const { filter, update: setFilter, reset: resetFilter, filtered, agents, isFiltered } =
-    useLeadFilter(leads)
+  const {
+    filter,
+    update: setFilter,
+    reset: resetFilter,
+    filtered,
+    agents,
+    isFiltered,
+  } = useLeadFilter(leads)
 
-  // ── DnD ───────────────────────────────────────────────────────────────────
+  const focusedLeads = useMemo(() => filtered.filter(lead => {
+    switch (focus) {
+      case 'ready':
+        return lead.stage === 'Waiting for contact' && (isAdmin ? isUnassigned(lead) : true)
+      case 'active':
+        return !['Waiting for contact', 'Move in / Deposit'].includes(lead.stage)
+      case 'showings':
+        return ['Set showings', 'Showings complete'].includes(lead.stage)
+      case 'applications':
+        return ['Completed Rentspree', 'Offer Sent'].includes(lead.stage)
+      case 'closing':
+        return ['Offer Sent', 'Offer Approved', 'HOA Approved'].includes(lead.stage)
+      case 'stale':
+        return isStale(lead)
+      case 'closed':
+        return closedThisMonth(lead)
+      default:
+        return true
+    }
+  }), [filtered, focus, isAdmin])
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
-  const leadsForStage = useCallback((s: string) => filtered.filter(l => l.stage === s), [filtered])
-  const activeLead = activeId ? leads.find(l => l.id === activeId) ?? null : null
+  const leadsForStage = useCallback(
+    (stage: string) => focusedLeads.filter(lead => lead.stage === stage),
+    [focusedLeads],
+  )
+  const activeLead = activeId ? leads.find(lead => lead.id === activeId) ?? null : null
 
-  function handleDragStart(e: DragStartEvent) { setActiveId(e.active.id as string) }
-
-  function handleDragOver(e: DragOverEvent) {
-    const { active, over } = e
-    if (!over) return
-    const aId = active.id as string, oId = over.id as string
-    const aLead = leads.find(l => l.id === aId)
-    if (!aLead) return
-    const overStage = STAGES.includes(oId as typeof STAGES[number])
-      ? oId : leads.find(l => l.id === oId)?.stage
-    if (!overStage || aLead.stage === overStage) return
-    setLeads(p => p.map(l => l.id === aId ? { ...l, stage: overStage } : l))
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string)
   }
 
-  async function handleDragEnd(e: DragEndEvent) {
-    const { active, over } = e
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event
+    if (!over) return
+    const activeId = active.id as string
+    const overId = over.id as string
+    const activeLead = leads.find(lead => lead.id === activeId)
+    if (!activeLead) return
+    const overStage = STAGES.includes(overId as typeof STAGES[number])
+      ? overId
+      : leads.find(lead => lead.id === overId)?.stage
+    if (!overStage || activeLead.stage === overStage) return
+    setLeads(previous => previous.map(lead => lead.id === activeId ? { ...lead, stage: overStage } : lead))
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
     setActiveId(null)
     if (!over) return
-    const aId = active.id as string, oId = over.id as string
-    const aLead = leads.find(l => l.id === aId)
-    if (!aLead) return
-    const overStage = STAGES.includes(oId as typeof STAGES[number])
-      ? oId : leads.find(l => l.id === oId)?.stage ?? aLead.stage
 
-    if (aLead.stage === overStage && aId !== oId) {
-      const sl = leadsForStage(overStage)
-      const oi = sl.findIndex(l => l.id === aId)
-      const ni = sl.findIndex(l => l.id === oId)
-      if (oi !== -1 && ni !== -1)
-        setLeads(p => [...p.filter(l => l.stage !== overStage), ...arrayMove(sl, oi, ni)])
+    const activeId = active.id as string
+    const overId = over.id as string
+    const activeLead = leads.find(lead => lead.id === activeId)
+    if (!activeLead) return
+
+    const overStage = STAGES.includes(overId as typeof STAGES[number])
+      ? overId
+      : leads.find(lead => lead.id === overId)?.stage ?? activeLead.stage
+
+    if (activeLead.stage === overStage && activeId !== overId) {
+      const stageLeads = leadsForStage(overStage)
+      const oldIndex = stageLeads.findIndex(lead => lead.id === activeId)
+      const newIndex = stageLeads.findIndex(lead => lead.id === overId)
+      if (oldIndex !== -1 && newIndex !== -1) {
+        setLeads(previous => [
+          ...previous.filter(lead => lead.stage !== overStage),
+          ...arrayMove(stageLeads, oldIndex, newIndex),
+        ])
+      }
     }
-    if (aLead.stage !== overStage) {
-      await supabase.from('leads').update({ stage: overStage }).eq('id', aId)
+
+    if (activeLead.stage !== overStage) {
+      await supabase.from('leads').update({ stage: overStage }).eq('id', activeId)
       toast({ type: 'success', title: 'Stage updated', body: `→ ${overStage}` })
     }
-    if (selected?.id === aId) setSelected(p => p ? { ...p, stage: overStage } : p)
+
+    if (selected?.id === activeId) {
+      setSelected(previous => previous ? { ...previous, stage: overStage } : previous)
+    }
   }
 
   function handleLeadUpdated(updated: Lead) {
-    setLeads(p => p.map(l => l.id === updated.id ? updated : l))
+    setLeads(previous => previous.map(lead => lead.id === updated.id ? updated : lead))
     setSelected(updated)
   }
 
   function handleLeadCreated(lead: Lead) {
-    setLeads(p => [lead, ...p])
+    setLeads(previous => [lead, ...previous])
     toast({ type: 'success', title: 'Lead created', body: lead.name ?? lead.id })
-    // If admin, auto-open dispatch for new manual lead if unassigned
-    if (isAdmin && (!lead.assigned_agent || lead.assigned_agent === 'Unassigned')) {
-      openDispatch(lead)
-    } else {
-      setSelected(lead)
-    }
+    if (isAdmin && isUnassigned(lead)) openDispatch(lead)
+    else setSelected(lead)
   }
 
   function handleDeleteLead(id: string) {
-    setLeads(p => p.filter(l => l.id !== id))
+    setLeads(previous => previous.filter(lead => lead.id !== id))
     setSelected(null)
     toast({ type: 'info', title: 'Lead deleted' })
   }
 
-  function handleAssigned(updatedLead: Lead, agentEmail: string) {
-    setLeads(p => p.map(l => l.id === updatedLead.id ? updatedLead : l))
+  function handleAssigned(updatedLead: Lead, assignedEmail: string) {
+    setLeads(previous => previous.map(lead => lead.id === updatedLead.id ? updatedLead : lead))
     setDispatchLead(null)
     setSelected(updatedLead)
-    toast({ type: 'success', title: 'Lead assigned', body: `→ ${agentEmail.split('@')[0]}` })
+    toast({ type: 'success', title: 'Lead assigned', body: `→ ${assignedEmail.split('@')[0]}` })
+  }
+
+  function resetWorkspaceFilters() {
+    resetFilter()
+    setFocus('all')
   }
 
   async function signOut() {
@@ -187,269 +272,145 @@ function BoardInner({
   }
 
   const avatarUrl = agentProfile?.avatar_url ?? avatarMap[agentEmail] ?? null
+  const displayName = agentProfile?.full_name || agentEmail.split('@')[0] || 'Agent'
+  const readyCount = leads.filter(lead => lead.stage === 'Waiting for contact' && isUnassigned(lead)).length
 
   return (
-    <div style={{
-      background: '#0a0d14',
-      color: '#e6edf3',
-      fontFamily: 'var(--font-geist-sans, system-ui)',
-      height: '100dvh',
-      display: 'flex', flexDirection: 'column',
-      fontSize: 14, overflow: 'hidden',
-    }}>
-      {/* Background */}
-      <div style={{
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
-        background: 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56,139,253,0.07) 0%, transparent 70%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(163,113,247,0.04) 0%, transparent 60%)',
-      }} />
-
-      {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <nav style={{
-        position: 'relative', zIndex: 10,
-        background: 'rgba(13,16,28,0.9)',
-        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        padding: isMobile ? '0 0.75rem' : '0 1.25rem', height: 52,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexShrink: 0, gap: 8,
-      }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, cursor: 'pointer' }} onClick={() => router.push('/pipeline')}>
-          <div style={{
-            width: 30, height: 30,
-            background: 'linear-gradient(135deg, #e87c2a, #f5a623)',
-            borderRadius: 8,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 12px rgba(245,166,35,0.25)',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="8" r="5" fill="white" opacity="0.9"/>
-              <path d="M2 14 Q10 10 18 14" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round"/>
-              <path d="M4 17 Q10 13 16 17" stroke="white" strokeWidth="1.5" fill="none" opacity="0.6" strokeLinecap="round"/>
+    <div className="ros-app">
+      <nav className="ros-nav">
+        <div className="ros-brand" onClick={() => router.push('/pipeline')}>
+          <div className="ros-logo" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M3 14.5c3.3-2.4 6.2-3.4 9-3.4 3 0 5.9 1 9 3.4" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round"/>
+              <path d="M5.5 18c2.4-1.6 4.6-2.3 6.5-2.3 2 0 4.1.7 6.5 2.3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" opacity=".7"/>
+              <circle cx="12" cy="6.7" r="3.1" fill="currentColor"/>
             </svg>
           </div>
-          {!isMobile && (
-            <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.3px', color: '#f0f6fc' }}>
-              Sun Ocean<span style={{ color: '#f5a623', marginLeft: 4 }}>Realty</span>
-            </span>
-          )}
-          {isAdmin && (
-            <span style={{
-              fontSize: 10, background: 'rgba(163,113,247,0.2)', color: '#a371f7',
-              border: '0.5px solid rgba(163,113,247,0.35)',
-              borderRadius: 20, padding: '2px 8px', fontWeight: 700, letterSpacing: '0.3px',
-            }}>ADMIN</span>
-          )}
+          <div className="ros-brand-copy">
+            <div className="ros-brand-title">Rental OS</div>
+            <div className="ros-brand-sub">Sun Ocean Realty</div>
+          </div>
+          {isAdmin && <span className="ros-admin-pill"><ShieldCheck size={11}/> Broker</span>}
         </div>
 
-        {/* Centre: view toggle — hide on mobile */}
-        {!isMobile && (
-          <div style={{
-            display: 'flex',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 8, padding: 3, gap: 2,
-          }}>
-            {(['kanban', 'list'] as const).map(mode => (
-              <button key={mode} onClick={() => setViewMode(mode)} style={{
-                background: viewMode === mode ? 'rgba(56,139,253,0.22)' : 'transparent',
-                border: viewMode === mode ? '0.5px solid rgba(56,139,253,0.4)' : '0.5px solid transparent',
-                color: viewMode === mode ? '#388bfd' : '#6e7681',
-                borderRadius: 5, padding: '4px 12px',
-                fontSize: 12, fontWeight: viewMode === mode ? 600 : 400,
-                cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
-              }}>
-                {mode === 'kanban' ? '⊞ Kanban' : '☰ List'}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="ros-view-switch" aria-label="View mode">
+          <button
+            type="button"
+            className={`ros-view-btn ${viewMode === 'kanban' ? 'is-active' : ''}`}
+            onClick={() => setViewMode('kanban')}
+          >
+            <LayoutGrid size={14}/> Pipeline
+          </button>
+          <button
+            type="button"
+            className={`ros-view-btn ${viewMode === 'list' ? 'is-active' : ''}`}
+            onClick={() => setViewMode('list')}
+          >
+            <List size={14}/> List
+          </button>
+        </div>
 
-        {/* Right */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, flexShrink: 0 }}>
-          {!isMobile && <span style={{ fontSize: 12, color: '#6e7681' }}>{leads.length} leads</span>}
-
-          {isAdmin && !isMobile && (
-            <button onClick={() => router.push('/admin')} style={{
-              background: 'rgba(163,113,247,0.1)',
-              border: '0.5px solid rgba(163,113,247,0.3)',
-              color: '#a371f7', padding: '5px 11px', borderRadius: 6,
-              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              God Mode
+        <div className="ros-nav-actions">
+          {isAdmin && readyCount > 0 && (
+            <button className="ros-ready-pill ros-hide-mobile" onClick={() => setFocus('ready')}>
+              <span className="ros-ready-dot" /> {readyCount} ready
             </button>
           )}
 
-          <button onClick={() => setShowCreate(true)} style={{
-            background: 'linear-gradient(135deg, #0550ae, #388bfd)',
-            color: '#fff', border: 'none', borderRadius: 6,
-            padding: '5px 13px', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', gap: 5,
-            boxShadow: '0 2px 8px rgba(56,139,253,0.28)',
-          }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{isMobile ? '' : ' New Lead'}
+          {isAdmin && (
+            <button className="ros-btn ros-btn-purple ros-hide-mobile" onClick={() => router.push('/admin')}>
+              <UsersRound size={14}/> Broker Center
+            </button>
+          )}
+
+          <button className="ros-btn ros-btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={15}/><span className="ros-hide-mobile">New lead</span>
           </button>
 
-          {isAdmin && !isMobile && (
-            <button onClick={() => exportLeadsToCSV(filtered)} style={{
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: '#8b949e', padding: '5px 11px', borderRadius: 6,
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              ↓ CSV
+          {isAdmin && (
+            <button className="ros-btn ros-icon-btn ros-hide-mobile" onClick={() => exportLeadsToCSV(focusedLeads)} title="Export current view to CSV">
+              <Download size={15}/>
             </button>
           )}
 
-          <div onClick={() => router.push('/profile')} title="My Profile" style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            cursor: 'pointer', padding: '4px 8px',
-            borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)',
-            background: 'rgba(255,255,255,0.04)',
-          }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%',
-              background: avatarUrl ? 'transparent' : 'rgba(56,139,253,0.18)',
-              border: '1.5px solid rgba(56,139,253,0.35)',
-              overflow: 'hidden', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: '#388bfd',
-            }}>
-              {avatarUrl
-                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : agentEmail.slice(0, 2).toUpperCase()
-              }
-            </div>
-            {!isMobile && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
-          </div>
+          <button className="ros-user" onClick={() => router.push('/profile')} title="My profile">
+            <span className="ros-user-avatar">
+              {avatarUrl ? <img src={avatarUrl} alt="" /> : displayName.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="ros-user-copy">
+              <span className="ros-user-name">{displayName}</span>
+              <span className="ros-user-role">{isAdmin ? 'Broker' : 'Agent'}</span>
+            </span>
+          </button>
 
-          {!isMobile && (
-            <button onClick={signOut} style={{
-              background: 'none', border: 'none', color: '#6e7681',
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              Sign out
-            </button>
-          )}
+          <button className="ros-btn ros-icon-btn ros-hide-mobile" onClick={toggleTheme} title="Toggle light/dark theme">
+            {lightTheme ? <Moon size={15}/> : <Sun size={15}/>} 
+          </button>
 
-          {/* Dark/Light mode toggle */}
-          <button onClick={() => {
-            const body = document.body
-            const isLight = body.getAttribute('data-theme') === 'light'
-            if (isLight) {
-              body.removeAttribute('data-theme')
-              body.style.filter = ''
-            } else {
-              body.setAttribute('data-theme', 'light')
-              body.style.filter = 'invert(0.92) hue-rotate(180deg)'
-            }
-          }} style={{
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#8b949e', width: 28, height: 28, borderRadius: 6,
-            cursor: 'pointer', fontSize: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }} title="Toggle light/dark mode">
-            ◐
+          <button className="ros-btn ros-icon-btn ros-hide-mobile" onClick={signOut} title="Sign out">
+            <LogOut size={14}/>
           </button>
         </div>
       </nav>
 
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 9, flexShrink: 0 }}>
-        <StatsBar leads={leads} isAdmin={isAdmin} />
-      </div>
+      <StatsBar leads={leads} isAdmin={isAdmin} focus={focus} onFocus={setFocus} />
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }}>
-        <FilterBar
-          filter={filter} agents={agents} isFiltered={isFiltered}
-          onUpdate={setFilter} onReset={resetFilter}
-          totalVisible={filtered.length} totalAll={leads.length}
-        />
-      </div>
+      <FilterBar
+        filter={filter}
+        agents={agents}
+        isFiltered={isFiltered || focus !== 'all'}
+        onUpdate={setFilter}
+        onReset={resetWorkspaceFilters}
+        totalVisible={focusedLeads.length}
+        totalAll={leads.length}
+      />
 
-      {/* ── Board + Panel ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative', zIndex: 1 }}>
-        {viewMode === 'kanban' ? (
-          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '12px 12px 0', minWidth: 0 }}>
+      <div className="ros-workspace">
+        {!isMobile && viewMode === 'kanban' ? (
+          <div className="ros-board-scroll">
             <DndContext
-              sensors={sensors} collisionDetection={closestCorners}
-              onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
             >
-              <div style={{
-                display: 'flex', gap: 10, height: '100%',
-                minWidth: 'max-content', alignItems: 'stretch', paddingBottom: 12,
-              }}>
+              <div className="ros-board">
                 {STAGES.map(stage => (
-                  <StageColumn key={stage} stage={stage}
+                  <StageColumn
+                    key={stage}
+                    stage={stage}
                     leads={leadsForStage(stage)}
-                    isAdmin={isAdmin} agentAvatarMap={avatarMap}
-                    onLeadClick={lead => setSelected(p => p?.id === lead.id ? null : lead)}
+                    isAdmin={isAdmin}
+                    agentAvatarMap={avatarMap}
+                    onLeadClick={lead => setSelected(previous => previous?.id === lead.id ? null : lead)}
                   />
                 ))}
               </div>
               <DragOverlay dropAnimation={{ duration: 180, easing: 'ease' }}>
-                {activeLead ? <LeadCard lead={activeLead} agentAvatarMap={avatarMap} isAdmin={isAdmin} onClick={() => {}} /> : null}
+                {activeLead
+                  ? <LeadCard lead={activeLead} agentAvatarMap={avatarMap} isAdmin={isAdmin} onClick={() => {}} />
+                  : null}
               </DragOverlay>
             </DndContext>
           </div>
         ) : (
           <ListView
-            leads={filtered} agentAvatarMap={avatarMap} isAdmin={isAdmin}
-            onLeadClick={lead => setSelected(p => p?.id === lead.id ? null : lead)}
+            leads={focusedLeads}
+            agentAvatarMap={avatarMap}
+            isAdmin={isAdmin}
+            onLeadClick={lead => setSelected(previous => previous?.id === lead.id ? null : lead)}
             onDeleteLead={handleDeleteLead}
           />
         )}
 
-        {/* Slide-out panel — full screen overlay on mobile, side panel on desktop */}
-        {isMobile && selected && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 50,
-            background: '#0d1117',
-            display: 'flex', flexDirection: 'column',
-          }}>
-            {/* Mobile back bar */}
-            <div style={{
-              padding: '10px 16px', flexShrink: 0,
-              borderBottom: '1px solid rgba(255,255,255,0.07)',
-              background: 'rgba(13,16,28,0.95)',
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
-              <button onClick={() => setSelected(null)} style={{
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-                color: '#e6edf3', borderRadius: 8, padding: '8px 16px',
-                fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                ← Back
-              </button>
-              <span style={{ fontSize: 14, color: '#f0f6fc', fontWeight: 600 }}>{selected.name ?? 'Lead'}</span>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              <LeadPanel
-                lead={selected} agentEmail={agentEmail} isAdmin={isAdmin}
-                onClose={() => setSelected(null)}
-                onLeadUpdated={handleLeadUpdated}
-                onDeleteLead={handleDeleteLead}
-                onDispatch={() => openDispatch(selected)}
-              />
-            </div>
-          </div>
-        )}
         {!isMobile && (
-          <div style={{
-            maxWidth: selected ? 380 : 0, width: 380,
-            overflow: 'hidden',
-            transition: 'max-width .28s cubic-bezier(0.4,0,0.2,1)',
-            borderLeft: '1px solid rgba(255,255,255,0.07)',
-            flexShrink: 0,
-          }}>
+          <div className={`ros-panel-slot ${selected ? 'is-open' : ''}`}>
             {selected && (
               <LeadPanel
-                lead={selected} agentEmail={agentEmail} isAdmin={isAdmin}
+                lead={selected}
+                agentEmail={agentEmail}
+                isAdmin={isAdmin}
                 onClose={() => setSelected(null)}
                 onLeadUpdated={handleLeadUpdated}
                 onDeleteLead={handleDeleteLead}
@@ -460,7 +421,41 @@ function BoardInner({
         )}
       </div>
 
-      {/* Modals */}
+      {isMobile && selected && (
+        <div className="ros-mobile-panel">
+          <div className="ros-mobile-panel-head">
+            <button className="ros-btn" onClick={() => setSelected(null)}>← Back</button>
+            <div className="ros-mobile-panel-title">{selected.name || 'Lead details'}</div>
+          </div>
+          <div className="ros-mobile-panel-body">
+            <LeadPanel
+              lead={selected}
+              agentEmail={agentEmail}
+              isAdmin={isAdmin}
+              onClose={() => setSelected(null)}
+              onLeadUpdated={handleLeadUpdated}
+              onDeleteLead={handleDeleteLead}
+              onDispatch={() => openDispatch(selected)}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="ros-mobile-actions">
+        <button className={`ros-mobile-action ${focus === 'all' ? 'is-primary' : ''}`} onClick={() => setFocus('all')}>
+          <LayoutGrid/>Leads
+        </button>
+        <button className={`ros-mobile-action ${focus === 'ready' ? 'is-primary' : ''}`} onClick={() => setFocus('ready')}>
+          <UserRound/>Priority
+        </button>
+        <button className="ros-mobile-action is-primary" onClick={() => setShowCreate(true)}>
+          <Plus/>New
+        </button>
+        <button className="ros-mobile-action" onClick={() => router.push('/profile')}>
+          <UserRound/>Profile
+        </button>
+      </div>
+
       {showCreate && (
         <LeadCreateModal
           onClose={() => setShowCreate(false)}
@@ -478,23 +473,7 @@ function BoardInner({
         />
       )}
 
-      {/* Live dot */}
-      <div style={{
-        position: 'fixed', bottom: 14, right: 16, zIndex: 20,
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: 'rgba(13,16,28,0.85)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 20, padding: '4px 10px',
-        fontSize: 11, color: '#6e7681', pointerEvents: 'none',
-      }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: '50%', background: '#3fb950',
-          display: 'inline-block', animation: 'livePulse 2.4s ease infinite',
-        }} />
-        Live
-        <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}`}</style>
-      </div>
+      <div className="ros-live-pill"><span className="ros-live-dot"/>Realtime</div>
     </div>
   )
 }

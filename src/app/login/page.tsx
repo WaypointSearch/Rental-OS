@@ -2,6 +2,17 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  Waves,
+  Zap,
+} from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
 
 type Mode = 'password' | 'magic'
@@ -16,288 +27,149 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
-  const [dark, setDark] = useState(true)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
     setLoading(true)
 
     if (mode === 'magic') {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error: authError } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${location.origin}/pipeline` },
+        options: { emailRedirectTo: `${location.origin}/auth/callback` },
       })
-      if (error) setError(error.message)
+      if (authError) setError(authError.message)
       else setSent(true)
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) setError(error.message)
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      if (authError) setError(authError.message)
       else router.push('/pipeline')
     }
 
     setLoading(false)
   }
 
-  const d = dark
-    ? {
-        page: '#0d1117',
-        card: '#161b22',
-        border: 'rgba(255,255,255,0.08)',
-        text: '#e6edf3',
-        muted: '#7d8590',
-        input: '#1c2128',
-        btn: '#238636',
-        btnHover: '#2ea043',
-      }
-    : {
-        page: '#f2f1ed',
-        card: '#ffffff',
-        border: 'rgba(0,0,0,0.08)',
-        text: '#1f2328',
-        muted: '#636c76',
-        input: '#f6f8fa',
-        btn: '#1a7f37',
-        btnHover: '#2da44e',
-      }
-
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: d.page,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'var(--font-geist-sans, system-ui)',
-        padding: '1rem',
-        position: 'relative',
-      }}
-    >
-      {/* Dark mode toggle */}
-      <button
-        onClick={() => setDark(!dark)}
-        style={{
-          position: 'absolute',
-          top: '1.25rem',
-          right: '1.25rem',
-          background: d.card,
-          border: `0.5px solid ${d.border}`,
-          color: d.muted,
-          borderRadius: '8px',
-          padding: '6px 14px',
-          fontSize: '12px',
-          cursor: 'pointer',
-        }}
-      >
-        {dark ? 'Light mode' : 'Dark mode'}
-      </button>
-
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '400px',
-          background: d.card,
-          borderRadius: '16px',
-          border: `0.5px solid ${d.border}`,
-          padding: '2.5rem 2rem',
-          boxShadow: dark
-            ? 'none'
-            : '0 4px 32px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)',
-        }}
-      >
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2rem' }}>
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              background: '#e87c2a',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <polygon
-                points="10,2 18,6.5 18,13.5 10,18 2,13.5 2,6.5"
-                stroke="white"
-                strokeWidth="1.8"
-                fill="none"
-              />
-              <circle cx="10" cy="10" r="2.8" fill="white" />
-            </svg>
+    <main className="ros-login">
+      <section className="ros-login-hero">
+        <div className="ros-login-brand">
+          <div className="ros-logo">
+            <Waves size={22} strokeWidth={2.4}/>
           </div>
-          <div>
-            <div style={{ fontSize: '17px', fontWeight: 500, color: d.text }}>Sun Ocean Realty</div>
-            <div style={{ fontSize: '12px', color: d.muted }}>Agent Portal</div>
+          <div className="ros-login-brand-copy">
+            <strong>Rental OS</strong>
+            <span>Sun Ocean Realty</span>
           </div>
         </div>
 
-        {sent ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '1.5rem 0',
-              color: d.text,
-            }}
-          >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                background: '#1a7f3722',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M20 4H4a1 1 0 00-1 1v14a1 1 0 001 1h16a1 1 0 001-1V5a1 1 0 00-1-1z" stroke="#1a7f37" strokeWidth="1.5" />
-                <path d="M3 6l9 7 9-7" stroke="#1a7f37" strokeWidth="1.5" />
-              </svg>
-            </div>
-            <p style={{ fontWeight: 500, marginBottom: '6px' }}>Check your email</p>
-            <p style={{ fontSize: '13px', color: d.muted }}>
-              We sent a magic link to <strong>{email}</strong>
-            </p>
-            <button
-              onClick={() => { setSent(false); setEmail('') }}
-              style={{
-                marginTop: '1.5rem',
-                background: 'none',
-                border: `0.5px solid ${d.border}`,
-                color: d.muted,
-                borderRadius: '8px',
-                padding: '7px 18px',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Back
-            </button>
+        <div className="ros-login-message">
+          <div className="ros-login-kicker">Rental operations, simplified</div>
+          <h1>Every lead.<br/>One clean system.</h1>
+          <p>
+            Qualify, assign, show, apply and close without losing the thread. Rental OS keeps the whole team moving from first text to move-in.
+          </p>
+          <div className="ros-login-proof">
+            <span className="ros-proof-pill"><Zap size={13}/> Realtime lead updates</span>
+            <span className="ros-proof-pill"><ShieldCheck size={13}/> Agent-specific access</span>
+            <span className="ros-proof-pill"><Sparkles size={13}/> AI-assisted intake</span>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                style={{ display: 'block', fontSize: '12px', color: d.muted, marginBottom: '5px' }}
-              >
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="agent@brokerage.com"
-                style={{
-                  width: '100%',
-                  background: d.input,
-                  border: `0.5px solid ${d.border}`,
-                  color: d.text,
-                  borderRadius: '8px',
-                  padding: '9px 12px',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
+        </div>
 
-            {mode === 'password' && (
-              <div style={{ marginBottom: '1rem' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    color: d.muted,
-                    marginBottom: '5px',
-                  }}
+        <div className="ros-login-footer">Private workspace for Sun Ocean Realty agents.</div>
+      </section>
+
+      <section className="ros-login-side">
+        <div className="ros-login-card">
+          {sent ? (
+            <div className="ros-auth-success">
+              <div className="ros-auth-success-icon"><CheckCircle2 size={25}/></div>
+              <h3>Check your inbox</h3>
+              <p>We sent a secure sign-in link to <strong>{email}</strong>. Open it on this device to enter Rental OS.</p>
+              <button
+                className="ros-btn"
+                type="button"
+                style={{ marginTop: 18 }}
+                onClick={() => { setSent(false); setEmail('') }}
+              >
+                Use another email
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2>Welcome back</h2>
+              <p>Sign in with your agent password, or use a one-time magic link.</p>
+
+              <div className="ros-auth-tabs">
+                <button
+                  type="button"
+                  className={`ros-auth-tab ${mode === 'password' ? 'is-active' : ''}`}
+                  onClick={() => { setMode('password'); setError(null) }}
                 >
                   Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  style={{
-                    width: '100%',
-                    background: d.input,
-                    border: `0.5px solid ${d.border}`,
-                    color: d.text,
-                    borderRadius: '8px',
-                    padding: '9px 12px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                </button>
+                <button
+                  type="button"
+                  className={`ros-auth-tab ${mode === 'magic' ? 'is-active' : ''}`}
+                  onClick={() => { setMode('magic'); setError(null) }}
+                >
+                  Magic link
+                </button>
               </div>
-            )}
 
-            {error && (
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: '#e24b4a',
-                  background: '#e24b4a11',
-                  border: '0.5px solid #e24b4a44',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  marginBottom: '1rem',
-                }}
-              >
-                {error}
+              <form onSubmit={handleSubmit}>
+                <div className="ros-field">
+                  <label>Email</label>
+                  <div className="ros-field-wrap">
+                    <Mail className="ros-field-icon" size={15}/>
+                    <input
+                      className="ros-auth-input"
+                      type="email"
+                      value={email}
+                      onChange={event => setEmail(event.target.value)}
+                      required
+                      autoComplete="email"
+                      placeholder="you@brokerage.com"
+                    />
+                  </div>
+                </div>
+
+                {mode === 'password' && (
+                  <div className="ros-field">
+                    <label>Password</label>
+                    <div className="ros-field-wrap">
+                      <KeyRound className="ros-field-icon" size={15}/>
+                      <input
+                        className="ros-auth-input"
+                        type="password"
+                        value={password}
+                        onChange={event => setPassword(event.target.value)}
+                        required
+                        autoComplete="current-password"
+                        placeholder="Your password"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className="ros-auth-error">{error}</div>}
+
+                <button className="ros-auth-submit" type="submit" disabled={loading}>
+                  {loading
+                    ? 'Signing in…'
+                    : mode === 'password'
+                      ? <><LockKeyhole size={15}/> Sign in <ArrowRight size={14}/></>
+                      : <><Mail size={15}/> Send magic link <ArrowRight size={14}/></>
+                  }
+                </button>
+              </form>
+
+              <div style={{ marginTop: 16, color: '#60758e', fontSize: 10, lineHeight: 1.6, textAlign: 'center' }}>
+                New agent? Use the invitation sent by your broker to activate your account.
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                background: d.btn,
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '10px 0',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                transition: 'opacity .15s',
-              }}
-            >
-              {loading ? 'Signing in…' : mode === 'password' ? 'Sign in' : 'Send magic link'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => { setMode(mode === 'password' ? 'magic' : 'password'); setError(null) }}
-              style={{
-                width: '100%',
-                background: 'none',
-                border: 'none',
-                color: d.muted,
-                fontSize: '13px',
-                marginTop: '12px',
-                cursor: 'pointer',
-                padding: '4px 0',
-              }}
-            >
-              {mode === 'password'
-                ? 'Sign in with magic link instead'
-                : 'Sign in with password instead'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+            </>
+          )}
+        </div>
+      </section>
+    </main>
   )
 }

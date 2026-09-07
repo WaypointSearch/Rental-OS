@@ -1,5 +1,7 @@
 'use client'
 
+import { formatDistanceToNowStrict } from 'date-fns'
+import { BedDouble, CalendarDays, FileText, MapPin, MessageSquare, Phone } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Lead, STAGE_COLORS } from '@/types/lead'
@@ -12,110 +14,114 @@ interface LeadCardProps {
 }
 
 function agentInitials(email: string): string {
-  return email.split('@')[0].split(/[._-]/).map(p => p[0]?.toUpperCase() ?? '').slice(0, 2).join('')
+  return email
+    .split('@')[0]
+    .split(/[._-]/)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .slice(0, 2)
+    .join('')
+}
+
+function cleanAgent(email: string | null | undefined) {
+  if (!email || email === 'Unassigned') return 'Unassigned'
+  return email.split('@')[0]
 }
 
 export function LeadCard({ lead, onClick, agentAvatarMap, isAdmin = false }: LeadCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id })
   const accent = STAGE_COLORS[lead.stage] ?? '#6e7681'
   const avatarUrl = lead.assigned_agent ? (agentAvatarMap[lead.assigned_agent] ?? null) : null
-  const agentLabel = lead.assigned_agent && lead.assigned_agent !== 'Unassigned'
-    ? lead.assigned_agent.split('@')[0] : 'Unassigned'
-  const hasDocs = (lead.documents ?? []).length > 0
+  const notes = lead.notes ?? []
+  const documents = lead.documents ?? []
+  const source = (lead.source ?? '').toLowerCase()
+  const sourceClass = source.includes('facebook') ? 'is-facebook' : 'is-google'
+  const age = formatDistanceToNowStrict(new Date(lead.created_at), { addSuffix: true })
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, cursor: isDragging ? 'grabbing' : 'grab' }}
-      {...attributes} {...listeners} onClick={onClick}
-    >
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        border: '1px solid rgba(255,255,255,0.09)',
-        borderRadius: 12, padding: '12px 14px',
-        transition: 'border-color .15s, background .15s',
-        userSelect: 'none', position: 'relative', overflow: 'hidden',
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : 1,
       }}
-        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLDivElement).style.borderColor = `${accent}55` }}
-        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.09)' }}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+    >
+      <article
+        className="ros-card"
+        style={{ '--stage-accent': accent } as React.CSSProperties}
       >
-        {/* Left accent */}
-        <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2, background: accent, opacity: 0.8 }} />
+        <div className="ros-card-accent" />
 
-        {/* Name + Phone */}
-        <div style={{ paddingLeft: 10, marginBottom: 6 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f6fc', letterSpacing: '-0.2px' }}>
-            {lead.name ?? 'Unknown'}
+        <div className="ros-card-head">
+          <span className={`ros-source-dot ${sourceClass}`} title={lead.source ?? 'Lead'} />
+          <div className="ros-card-identity">
+            <div className="ros-card-name">{lead.name || 'Unnamed lead'}</div>
+            {lead.phone && (
+              <a
+                className="ros-card-phone"
+                href={`tel:${lead.phone.replace(/\D/g, '')}`}
+                onClick={event => event.stopPropagation()}
+              >
+                <Phone size={11} strokeWidth={2.2} /> {lead.phone}
+              </a>
+            )}
           </div>
-          {lead.phone && (
-            <a href={`tel:${lead.phone}`} onClick={e => e.stopPropagation()}
-              style={{ fontSize: 12, color: '#388bfd', textDecoration: 'none', fontWeight: 500 }}>
-              {lead.phone}
-            </a>
-          )}
+          <span className="ros-mini-tag" title="Lead age">{age}</span>
         </div>
 
-        {/* Info grid */}
-        <div style={{ paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 6 }}>
-          {lead.budget && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: '#6e7681', width: 42, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Budget</span>
-              <span style={{ fontSize: 12, color: accent, fontWeight: 600 }}>{lead.budget}</span>
-            </div>
-          )}
+        {lead.budget && (
+          <div className="ros-card-budget">
+            <span>Budget</span>
+            <strong>{lead.budget}</strong>
+          </div>
+        )}
+
+        <div className="ros-card-facts">
           {lead.area && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontSize: 10, color: '#6e7681', width: 42, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Area</span>
-              <span style={{ fontSize: 11, color: '#c9d1d9', lineHeight: 1.4, wordBreak: 'break-word' }}>{lead.area}</span>
-            </div>
-          )}
-          {lead.move_in && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: '#6e7681', width: 42, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Move</span>
-              <span style={{ fontSize: 11, color: '#8b949e' }}>{lead.move_in}</span>
+            <div className="ros-card-fact">
+              <MapPin size={12} strokeWidth={2} />
+              <span className="ros-card-fact-text"><strong>{lead.area}</strong></span>
             </div>
           )}
           {(lead.bedrooms || lead.bathrooms) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: '#6e7681', width: 42, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Bd/Ba</span>
-              <span style={{ fontSize: 11, color: '#8b949e' }}>{lead.bedrooms ?? '?'}/{lead.bathrooms ?? '?'}</span>
+            <div className="ros-card-fact">
+              <BedDouble size={12} strokeWidth={2} />
+              <span><strong>{lead.bedrooms ?? '?'} bd</strong> · {lead.bathrooms ?? '?'} ba</span>
+            </div>
+          )}
+          {lead.move_in && (
+            <div className="ros-card-fact">
+              <CalendarDays size={12} strokeWidth={2} />
+              <span>Move: <strong>{lead.move_in}</strong></span>
             </div>
           )}
         </div>
 
-        {/* Bottom row */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          paddingLeft: 10, paddingTop: 7,
-          borderTop: '0.5px solid rgba(255,255,255,0.06)',
-        }}>
+        <div className="ros-card-foot">
           {isAdmin && (
-            <>
-              <div style={{
-                width: 18, height: 18, borderRadius: '50%',
-                background: avatarUrl ? 'transparent' : 'rgba(56,139,253,0.2)',
-                border: '1px solid rgba(56,139,253,0.3)', overflow: 'hidden', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 8, fontWeight: 600, color: '#388bfd',
-              }}>
-                {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : agentInitials(lead.assigned_agent ?? '')}
-              </div>
-              <span style={{ fontSize: 10, color: '#6e7681', fontWeight: 500 }}>{agentLabel}</span>
-            </>
-          )}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 5, alignItems: 'center' }}>
-            {hasDocs && (
-              <span style={{ fontSize: 10, background: 'rgba(56,139,253,0.12)', color: '#388bfd', borderRadius: 20, padding: '2px 7px', fontWeight: 600, border: '0.5px solid rgba(56,139,253,0.25)' }}>
-                {(lead.documents ?? []).length} doc{(lead.documents ?? []).length !== 1 ? 's' : ''}
+            <div className="ros-agent-chip" title={lead.assigned_agent || 'Unassigned'}>
+              <span className="ros-agent-mini">
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="" />
+                  : agentInitials(lead.assigned_agent ?? '') || '—'}
               </span>
+              <span>{cleanAgent(lead.assigned_agent)}</span>
+            </div>
+          )}
+
+          <div className="ros-card-tags">
+            {documents.length > 0 && (
+              <span className="ros-mini-tag"><FileText size={10} />{documents.length}</span>
             )}
-            {lead.notes.length > 0 && (
-              <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.07)', borderRadius: 20, padding: '2px 7px', color: '#6e7681' }}>{lead.notes.length}</span>
+            {notes.length > 0 && (
+              <span className="ros-mini-tag"><MessageSquare size={10} />{notes.length}</span>
             )}
           </div>
         </div>
-      </div>
+      </article>
     </div>
   )
 }

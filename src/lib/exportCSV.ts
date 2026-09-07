@@ -2,7 +2,7 @@ import { Lead } from '@/types/lead'
 
 /**
  * Converts the leads array to a CSV string and triggers a browser download.
- * All 12 original GAS columns are included, plus stage, agent, and note count.
+ * All original GAS columns are included, plus stage, agent, and note count.
  */
 export function exportLeadsToCSV(leads: Lead[], filename = 'sun-ocean-leads.csv') {
   const HEADERS = [
@@ -27,7 +27,7 @@ export function exportLeadsToCSV(leads: Lead[], filename = 'sun-ocean-leads.csv'
     'Created At',
   ]
 
-  function escape(val: string | null | undefined): string {
+  function escape(val: string | number | null | undefined): string {
     if (val == null) return ''
     const s = String(val).replace(/"/g, '""')
     return s.includes(',') || s.includes('"') || s.includes('\n')
@@ -35,30 +35,30 @@ export function exportLeadsToCSV(leads: Lead[], filename = 'sun-ocean-leads.csv'
       : s
   }
 
-  const rows = leads.map((l) => {
-    const latestNote =
-      l.notes.length > 0 ? `${l.notes[0].ts} – ${l.notes[0].text}` : ''
+  const rows = leads.map((lead) => {
+    const notes = lead.notes ?? []
+    const latestNote = notes.length > 0 ? `${notes[0].ts} – ${notes[0].text}` : ''
 
     return [
-      l.id,
-      l.source,
-      l.name,
-      l.phone,
-      l.area,
-      l.bedrooms,
-      l.budget,
-      l.move_in,
-      l.pets,
-      l.credit,
-      l.income,
-      l.mls_codes,
-      l.urls,
-      l.cl_url,
-      l.stage,
-      l.assigned_agent,
-      l.notes.length,
+      lead.id,
+      lead.source,
+      lead.name,
+      lead.phone,
+      lead.area,
+      lead.bedrooms,
+      lead.budget,
+      lead.move_in,
+      lead.pets,
+      lead.credit,
+      lead.income,
+      lead.mls_codes,
+      lead.urls,
+      lead.cl_url,
+      lead.stage,
+      lead.assigned_agent,
+      notes.length,
       latestNote,
-      l.created_at,
+      lead.created_at,
     ]
       .map(escape)
       .join(',')
@@ -68,21 +68,18 @@ export function exportLeadsToCSV(leads: Lead[], filename = 'sun-ocean-leads.csv'
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
 
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
 
   URL.revokeObjectURL(url)
 }
 
-/**
- * Filters leads to a specific stage and exports just that column.
- */
 export function exportStageToCSV(leads: Lead[], stage: string) {
   const stageName = stage.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
   exportLeadsToCSV(
-    leads.filter((l) => l.stage === stage),
+    leads.filter((lead) => lead.stage === stage),
     `sun-ocean-${stageName}.csv`
   )
 }

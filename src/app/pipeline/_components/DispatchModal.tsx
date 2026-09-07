@@ -1,8 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import {
+  BadgeCheck,
+  CalendarCheck2,
+  Check,
+  ChevronRight,
+  Clock3,
+  MapPin,
+  Phone,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  UserRoundCheck,
+  X,
+} from 'lucide-react'
 import { Lead, STAGE_COLORS } from '@/types/lead'
-import { AgentProfile, DAYS, DAY_LABELS, DayKey } from '@/types/agent'
+import { AgentProfile, DAY_LABELS, DayKey } from '@/types/agent'
 import { getSupabase } from '@/lib/supabase'
 
 interface DispatchModalProps {
@@ -12,33 +26,110 @@ interface DispatchModalProps {
   onAssigned: (lead: Lead, agentEmail: string) => void
 }
 
-const DAYS_ORDER: DayKey[] = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+type RankedAgent = AgentProfile & {
+  score: number
+  reasons: string[]
+  availableToday: boolean
+  availableTomorrow: boolean
+}
 
-function LeadSummaryRow({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null
-  return (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-      padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
-    }}>
-      <span style={{ fontSize: 12, color: '#6e7681', flexShrink: 0, width: 110 }}>{label}</span>
-      <span style={{ fontSize: 13, color: '#c9d1d9', fontWeight: 500, textAlign: 'right', flex: 1 }}>{value}</span>
-    </div>
+const DAY_ORDER: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+function dayKey(offset = 0): DayKey {
+  const date = new Date()
+  date.setDate(date.getDate() + offset)
+  const jsDay = date.getDay()
+  return DAY_ORDER[(jsDay + 6) % 7]
+}
+
+function normalize(value: string | null | undefined) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function locationTokens(lead: Lead) {
+  const raw = [lead.area, ...(lead.specific_cities ?? [])]
+    .map(normalize)
+    .filter(Boolean)
+
+  const tokens = new Set<string>()
+  for (const item of raw) {
+    tokens.add(item)
+    item.split(/,|\//).map(part => part.trim()).filter(part => part.length >= 4).forEach(part => tokens.add(part))
+  }
+  return [...tokens]
+}
+
+function rankAgent(agent: AgentProfile, lead: Lead): RankedAgent {
+  const today = dayKey(0)
+  const tomorrow = dayKey(1)
+  const availableToday = Boolean(agent.availability?.[today]?.active)
+  const availableTomorrow = Boolean(agent.availability?.[tomorrow]?.active)
+  const reasons: string[] = []
+  let score = 0
+
+  if (availableToday) {
+    score += 5
+    reasons.push('Available today')
+  } else if (availableTomorrow) {
+    score += 2
+    reasons.push('Available tomorrow')
+  }
+
+  const showingAreas = normalize(agent.showing_areas)
+  const leadLocations = locationTokens(lead)
+  const areaMatch = showingAreas && leadLocations.some(location =>
+    location.length >= 4 && (showingAreas.includes(location) || location.includes(showingAreas))
   )
+
+  if (areaMatch) {
+    score += 7
+    reasons.push('Area match')
+  }
+
+  if (agent.lead_preference === 'both') {
+    score += 2
+    reasons.push('Full-service lead')
+  } else if (agent.lead_preference === 'showing_only') {
+    score += 1
+  }
+
+  if (agent.mls_affiliation && agent.mls_affiliation !== 'no_mls') {
+    score += 1
+    reasons.push('MLS access')
+  }
+
+  const activeDays = DAY_ORDER.filter(day => agent.availability?.[day]?.active).length
+  score += Math.min(activeDays, 7) * 0.15
+
+  return { ...agent, score, reasons, availableToday, availableTomorrow }
+}
+
+function leadSummaryValue(value: string | null | undefined) {
+  return value && String(value).trim() ? value : '—'
 }
 
 export function DispatchModal({ lead, agents, onClose, onAssigned }: DispatchModalProps) {
   const supabase = getSupabase()
   const [assigning, setAssigning] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const accent = STAGE_COLORS[lead.stage] ?? '#6e7681'
 
-  const mlsCodes = (lead.mls_codes ?? '').split(',').map(s => s.trim()).filter(Boolean)
-  const cities = lead.specific_cities?.join(', ') ?? lead.area ?? '—'
+  const ranked = useMemo(() => agents
+    .map(agent => rankAgent(agent, lead))
+    .filter(agent => {
+      const haystack = normalize(`${agent.full_name} ${agent.email} ${agent.showing_areas} ${agent.mls_affiliation}`)
+      return !query.trim() || haystack.includes(normalize(query))
+    })
+    .sort((a, b) => b.score - a.score || (a.full_name ?? a.email).localeCompare(b.full_name ?? b.email)),
+  [agents, lead, query])
 
   async function assignTo(agent: AgentProfile) {
     setAssigning(agent.email)
     try {
-      // 1. Update Supabase
       const { error } = await supabase
         .from('leads')
         .update({ assigned_agent: agent.email })
@@ -46,19 +137,18 @@ export function DispatchModal({ lead, agents, onClose, onAssigned }: DispatchMod
 
       if (error) throw error
 
-      // 2. Fire assignment email via API route
       await fetch('/api/send-assignment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadId:     lead.id,
+          leadId: lead.id,
           agentEmail: agent.email,
-          leadName:   lead.name,
-          budget:     lead.budget,
-          moveIn:     lead.move_in,
-          phone:      lead.phone,
-          source:     lead.source,
-          area:       lead.area,
+          leadName: lead.name,
+          budget: lead.budget,
+          moveIn: lead.move_in,
+          phone: lead.phone,
+          source: lead.source,
+          area: lead.area,
         }),
       })
 
@@ -68,313 +158,171 @@ export function DispatchModal({ lead, agents, onClose, onAssigned }: DispatchMod
     }
   }
 
+  const location = lead.specific_cities?.length
+    ? lead.specific_cities.join(', ')
+    : lead.area
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '1rem',
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: '#13181f',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 860,
-          maxHeight: '90dvh',
-          display: 'flex',
-          flexWrap: 'wrap',
-          overflow: 'hidden',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
-        }}
-      >
-        {/* ── LEFT: Lead Summary ─────────────────────────────── */}
-        <div style={{
-          width: 320,
-          minWidth: 280,
-          flexShrink: 0,
-          flexGrow: 0,
-          borderRight: '1px solid rgba(255,255,255,0.07)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
-          {/* Lead header */}
-          <div style={{
-            padding: '20px 22px',
-            background: 'rgba(255,255,255,0.02)',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
-          }}>
-            <div style={{ fontSize: 11, color: '#6e7681', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
-              New Unassigned Lead
-            </div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: '#f0f6fc', letterSpacing: '-0.4px', marginBottom: 6 }}>
-              {lead.name ?? 'Unknown'}
-            </div>
+    <div className="ros-dispatch-backdrop" onClick={onClose}>
+      <div className="ros-dispatch" onClick={event => event.stopPropagation()}>
+        <aside className="ros-dispatch-lead">
+          <div className="ros-dispatch-lead-head">
+            <div className="ros-dispatch-kicker"><Sparkles size={12}/> Ready to assign</div>
+            <h2>{lead.name || 'Unnamed lead'}</h2>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{
-                fontSize: 11, background: `${accent}20`, color: accent,
-                border: `0.5px solid ${accent}50`, borderRadius: 20,
-                padding: '2px 9px', fontWeight: 600,
-              }}>
-                {lead.stage}
-              </span>
-              {lead.source && (
-                <span style={{
-                  fontSize: 10,
-                  background: lead.source.toLowerCase().includes('facebook') ? 'rgba(24,119,242,0.2)' : 'rgba(52,168,83,0.2)',
-                  color: lead.source.toLowerCase().includes('facebook') ? '#1877f2' : '#34a853',
-                  borderRadius: 20, padding: '2px 8px', fontWeight: 600,
-                }}>
-                  {lead.source.toLowerCase().includes('facebook') ? 'Facebook' : 'Google Voice'}
-                </span>
-              )}
+              <span className="ros-badge" style={{ padding: '4px 8px', fontSize: 9, color: accent, background: `color-mix(in srgb, ${accent} 10%, transparent)`, borderColor: `color-mix(in srgb, ${accent} 22%, transparent)` }}>{lead.stage}</span>
+              {lead.source && <span className="ros-badge" style={{ padding: '4px 8px', fontSize: 9, color: 'var(--ros-muted)' }}>{lead.source}</span>}
             </div>
           </div>
 
-          {/* Lead criteria */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 22px' }}>
+          <div className="ros-dispatch-lead-body">
             {lead.phone && (
-              <div style={{ marginBottom: 14 }}>
-                <a href={`tel:${lead.phone}`} style={{
-                  fontSize: 15, color: '#388bfd', fontWeight: 600,
-                  textDecoration: 'none', letterSpacing: '-0.2px',
-                }}>
-                  {lead.phone}
-                </a>
-              </div>
+              <a className="ros-dispatch-phone" href={`tel:${lead.phone.replace(/\D/g, '')}`}>
+                <Phone size={14}/> {lead.phone}
+              </a>
             )}
-            <LeadSummaryRow label="Cities"       value={cities} />
-            <LeadSummaryRow label="Bedrooms"     value={lead.bedrooms ? `${lead.bedrooms} bd` : null} />
-            <LeadSummaryRow label="Budget"       value={lead.budget} />
-            <LeadSummaryRow label="Move-in"      value={lead.move_in} />
-            <LeadSummaryRow label="Pets"         value={lead.pets} />
-            <LeadSummaryRow label="Credit"       value={lead.credit} />
-            <LeadSummaryRow label="Income"       value={lead.income} />
-            <LeadSummaryRow label="Criminal/Evic" value={lead.criminal_eviction_status} />
 
-            {mlsCodes.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 10, color: '#6e7681', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>
-                  MLS Picks
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {mlsCodes.map(code => (
-                    <span key={code} style={{
-                      fontSize: 11, background: 'rgba(56,139,253,0.15)',
-                      border: '0.5px solid rgba(56,139,253,0.3)',
-                      color: '#388bfd', borderRadius: 6, padding: '3px 8px', fontWeight: 600,
-                    }}>
-                      {code}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── RIGHT: Agents ──────────────────────────────────── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Header */}
-          <div style={{
-            padding: '20px 22px',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'rgba(255,255,255,0.02)',
-          }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f6fc' }}>Assign to Agent</div>
-              <div style={{ fontSize: 12, color: '#6e7681', marginTop: 2 }}>
-                {agents.length} agent{agents.length !== 1 ? 's' : ''} available
-              </div>
+            <div className="ros-dispatch-facts">
+              <div><span>Area</span><strong>{leadSummaryValue(location)}</strong></div>
+              <div><span>Bedrooms</span><strong>{leadSummaryValue(lead.bedrooms)}</strong></div>
+              <div><span>Budget</span><strong>{leadSummaryValue(lead.budget)}</strong></div>
+              <div><span>Move-in</span><strong>{leadSummaryValue(lead.move_in)}</strong></div>
+              <div><span>Pets</span><strong>{leadSummaryValue(lead.pets)}</strong></div>
+              <div><span>Credit</span><strong>{leadSummaryValue(lead.credit)}</strong></div>
+              <div><span>Income</span><strong>{leadSummaryValue(lead.income)}</strong></div>
+              <div><span>Eviction / criminal</span><strong>{leadSummaryValue(lead.criminal_eviction_status)}</strong></div>
             </div>
-            <button
-              onClick={onClose}
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#6e7681', width: 30, height: 30, borderRadius: 7,
-                cursor: 'pointer', fontSize: 18,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              ×
-            </button>
-          </div>
 
-          {/* Agent list — sorted by availability: today > tomorrow > most days */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
-            {agents.length === 0 && (
-              <div style={{
-                textAlign: 'center', padding: '3rem 0',
-                color: 'rgba(255,255,255,0.2)', fontSize: 14,
-              }}>
-                No agents found. Invite agents in Admin → Agents.
+            {lead.notes_crm && (
+              <div className="ros-dispatch-summary">
+                <span>AI summary</span>
+                <p>{lead.notes_crm}</p>
               </div>
             )}
-            {(() => {
-              const todayIdx = new Date().getDay() // 0=Sun
-              const todayKey = DAYS_ORDER[(todayIdx + 6) % 7] // Convert to Mon=0
-              const tomorrowKey = DAYS_ORDER[(todayIdx + 7) % 7 % 7]
+          </div>
+        </aside>
 
-              const sorted = [...agents].sort((a, b) => {
-                const aToday = a.availability?.[todayKey]?.active ? 1 : 0
-                const bToday = b.availability?.[todayKey]?.active ? 1 : 0
-                if (bToday !== aToday) return bToday - aToday
+        <section className="ros-dispatch-agents">
+          <header className="ros-dispatch-head">
+            <div>
+              <div className="ros-dispatch-title">Choose the best agent</div>
+              <div className="ros-dispatch-sub">Ranked from live profile data, availability and coverage.</div>
+            </div>
+            <button className="ros-btn ros-icon-btn" onClick={onClose} aria-label="Close"><X size={16}/></button>
+          </header>
 
-                const aTomorrow = a.availability?.[tomorrowKey]?.active ? 1 : 0
-                const bTomorrow = b.availability?.[tomorrowKey]?.active ? 1 : 0
-                if (bTomorrow !== aTomorrow) return bTomorrow - aTomorrow
+          <div className="ros-dispatch-search">
+            <Search size={14}/>
+            <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents or showing areas…" />
+          </div>
 
-                const aDays = DAYS_ORDER.filter(d => a.availability?.[d]?.active).length
-                const bDays = DAYS_ORDER.filter(d => b.availability?.[d]?.active).length
-                return bDays - aDays
-              })
-
-              return sorted.map(agent => {
-              const isCurrentAgent = lead.assigned_agent === agent.email
-              const activeDays = DAYS_ORDER.filter(d => agent.availability?.[d]?.active)
-              const isAssigning = assigning === agent.email
-              const _todayIdx = new Date().getDay()
-              const _todayKey = DAYS_ORDER[(_todayIdx + 6) % 7]
-              const _tomorrowKey = DAYS_ORDER[(_todayIdx) % 7]
-              const availToday = agent.availability?.[_todayKey]?.active
-              const availTomorrow = agent.availability?.[_tomorrowKey]?.active
+          <div className="ros-agent-rank-list">
+            {ranked.map((agent, index) => {
+              const current = lead.assigned_agent === agent.email
+              const busy = assigning === agent.email
+              const bestMatch = index === 0 && agent.score > 0
+              const activeDays = DAY_ORDER.filter(day => agent.availability?.[day]?.active)
 
               return (
-                <div
-                  key={agent.id}
-                  style={{
-                    background: isCurrentAgent
-                      ? 'rgba(56,139,253,0.08)'
-                      : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${isCurrentAgent ? 'rgba(56,139,253,0.3)' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: 12,
-                    padding: '14px 16px',
-                    marginBottom: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14,
-                    transition: 'background .15s',
-                  }}
-                >
-                  {/* Avatar */}
-                  <div style={{
-                    width: 44, height: 44, borderRadius: '50%',
-                    background: agent.avatar_url ? 'transparent' : 'rgba(56,139,253,0.15)',
-                    border: '1.5px solid rgba(56,139,253,0.3)',
-                    overflow: 'hidden', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700, color: '#388bfd',
-                  }}>
+                <article key={agent.id} className={`ros-agent-rank ${bestMatch ? 'is-best' : ''}`}>
+                  <div className="ros-agent-rank-avatar">
                     {agent.avatar_url
-                      ? <img src={agent.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : (agent.full_name ?? agent.email).slice(0, 2).toUpperCase()
-                    }
+                      ? <img src={agent.avatar_url} alt="" />
+                      : (agent.full_name ?? agent.email).slice(0, 2).toUpperCase()}
                   </div>
 
-                  {/* Agent info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f6fc', marginBottom: 2 }}>
-                      {agent.full_name ?? agent.email.split('@')[0]}
+                  <div className="ros-agent-rank-main">
+                    <div className="ros-agent-rank-name-row">
+                      <strong>{agent.full_name || agent.email.split('@')[0]}</strong>
+                      {bestMatch && <span className="ros-best-pill"><Sparkles size={10}/> Best match</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#6e7681', marginBottom: 6 }}>
-                      {agent.email}
-                      {agent.alert_phone && (
-                        <span style={{ marginLeft: 8 }}>· 📱 {agent.alert_phone}</span>
-                      )}
+                    <div className="ros-agent-rank-email">{agent.email}</div>
+
+                    <div className="ros-agent-reasons">
+                      {agent.reasons.map(reason => (
+                        <span key={reason}>
+                          {reason === 'Area match' && <MapPin size={10}/>} 
+                          {reason === 'Available today' && <CalendarCheck2 size={10}/>} 
+                          {reason === 'Available tomorrow' && <Clock3 size={10}/>} 
+                          {reason === 'MLS access' && <ShieldCheck size={10}/>} 
+                          {reason === 'Full-service lead' && <BadgeCheck size={10}/>} 
+                          {reason}
+                        </span>
+                      ))}
+                      {agent.reasons.length === 0 && <span>Profile match not configured</span>}
                     </div>
 
-                    {/* Availability status badges */}
-                    {(availToday || availTomorrow) && (
-                      <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
-                        {availToday && (
-                          <span style={{ fontSize: 10, background: 'rgba(63,185,80,0.15)', color: '#3fb950', borderRadius: 20, padding: '2px 8px', fontWeight: 600, border: '0.5px solid rgba(63,185,80,0.3)' }}>
-                            Available today
-                          </span>
-                        )}
-                        {availTomorrow && !availToday && (
-                          <span style={{ fontSize: 10, background: 'rgba(227,179,65,0.15)', color: '#e3b341', borderRadius: 20, padding: '2px 8px', fontWeight: 600, border: '0.5px solid rgba(227,179,65,0.3)' }}>
-                            Available tomorrow
-                          </span>
-                        )}
-                      </div>
+                    {agent.showing_areas && (
+                      <div className="ros-agent-coverage">{agent.showing_areas}</div>
                     )}
 
-                    {/* Availability pills */}
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {DAYS_ORDER.map(day => {
+                    <div className="ros-agent-days">
+                      {DAY_ORDER.map(day => {
                         const slot = agent.availability?.[day]
-                        const active = slot?.active
                         return (
-                          <span
-                            key={day}
-                            title={active ? `${DAY_LABELS[day]}: ${slot?.start} – ${slot?.end}` : `${DAY_LABELS[day]}: Off`}
-                            style={{
-                              fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                              background: active ? 'rgba(63,185,80,0.15)' : 'rgba(255,255,255,0.04)',
-                              color: active ? '#3fb950' : 'rgba(255,255,255,0.2)',
-                              border: `0.5px solid ${active ? 'rgba(63,185,80,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                              fontWeight: active ? 600 : 400,
-                            }}
-                          >
+                          <span key={day} className={slot?.active ? 'is-on' : ''} title={slot?.active ? `${DAY_LABELS[day]} ${slot.start}–${slot.end}` : `${DAY_LABELS[day]} off`}>
                             {DAY_LABELS[day]}
                           </span>
                         )
                       })}
-                      {activeDays.length === 0 && (
-                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
-                          No availability set
-                        </span>
-                      )}
+                      <span className="ros-agent-meta">{activeDays.length} day{activeDays.length === 1 ? '' : 's'} / wk</span>
+                      {agent.mls_affiliation && <span className="ros-agent-meta">{agent.mls_affiliation.replace('_', ' ')}</span>}
                     </div>
                   </div>
 
-                  {/* Assign button */}
-                  {isCurrentAgent ? (
-                    <span style={{
-                      fontSize: 11, color: '#388bfd',
-                      background: 'rgba(56,139,253,0.12)',
-                      border: '0.5px solid rgba(56,139,253,0.3)',
-                      borderRadius: 20, padding: '4px 12px', fontWeight: 600,
-                    }}>
-                      Assigned
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => assignTo(agent)}
-                      disabled={isAssigning}
-                      style={{
-                        background: isAssigning
-                          ? 'rgba(56,139,253,0.2)'
-                          : 'linear-gradient(135deg, #0550ae, #388bfd)',
-                        border: 'none', color: '#fff', borderRadius: 8,
-                        padding: '8px 18px', fontSize: 13, fontWeight: 600,
-                        cursor: isAssigning ? 'not-allowed' : 'pointer',
-                        fontFamily: 'inherit', flexShrink: 0,
-                        boxShadow: isAssigning ? 'none' : '0 2px 8px rgba(56,139,253,0.3)',
-                        transition: 'all .15s',
-                        opacity: isAssigning ? 0.7 : 1,
-                      }}
-                    >
-                      {isAssigning ? 'Assigning…' : 'Assign →'}
-                    </button>
-                  )}
-                </div>
+                  <div className="ros-agent-rank-action">
+                    {current ? (
+                      <span className="ros-current-pill"><Check size={11}/> Assigned</span>
+                    ) : (
+                      <button className="ros-btn ros-btn-primary" disabled={busy} onClick={() => assignTo(agent)}>
+                        {busy ? 'Assigning…' : <>Assign <ChevronRight size={14}/></>}
+                      </button>
+                    )}
+                  </div>
+                </article>
               )
-            })
-            })()}
+            })}
+
+            {ranked.length === 0 && (
+              <div className="ros-agent-empty"><UserRoundCheck size={24}/><span>No matching agents found.</span></div>
+            )}
           </div>
-        </div>
+        </section>
       </div>
+
+      <style>{`
+        .ros-dispatch-backdrop{position:fixed;inset:0;z-index:300;padding:18px;display:grid;place-items:center;background:rgba(0,6,13,.72);backdrop-filter:blur(12px)}
+        .ros-dispatch{width:min(1020px,100%);max-height:92dvh;display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.55fr);overflow:hidden;border:1px solid var(--ros-line-strong);border-radius:22px;background:var(--ros-panel-solid);box-shadow:0 35px 100px rgba(0,0,0,.42)}
+        .ros-dispatch-lead{min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--ros-line);background:linear-gradient(180deg,color-mix(in srgb,var(--ros-brand) 5%,var(--ros-panel-solid)),var(--ros-panel-solid))}
+        .ros-dispatch-lead-head{padding:24px 22px;border-bottom:1px solid var(--ros-line)}
+        .ros-dispatch-kicker{display:flex;align-items:center;gap:6px;margin-bottom:9px;color:var(--ros-brand);font-size:9px;font-weight:780;text-transform:uppercase;letter-spacing:.12em}
+        .ros-dispatch-lead h2{margin:0 0 11px;color:var(--ros-text);font-size:24px;letter-spacing:-.04em}
+        .ros-dispatch-lead-body{flex:1;min-height:0;overflow:auto;padding:18px 22px 24px}
+        .ros-dispatch-phone{display:inline-flex;align-items:center;gap:6px;margin-bottom:14px;color:var(--ros-blue);font-size:13px;font-weight:700;text-decoration:none}
+        .ros-dispatch-facts{display:grid;grid-template-columns:1fr 1fr;gap:11px 13px}
+        .ros-dispatch-facts span{display:block;margin-bottom:3px;color:var(--ros-muted-2);font-size:8px;font-weight:760;text-transform:uppercase;letter-spacing:.08em}
+        .ros-dispatch-facts strong{display:block;color:var(--ros-text-2);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+        .ros-dispatch-summary{margin-top:17px;padding:12px;border:1px solid var(--ros-line);border-radius:12px;background:var(--ros-card)}
+        .ros-dispatch-summary span{color:var(--ros-muted-2);font-size:8px;font-weight:760;text-transform:uppercase;letter-spacing:.08em}
+        .ros-dispatch-summary p{margin:6px 0 0;color:var(--ros-muted);font-size:10px;line-height:1.55;white-space:pre-wrap}
+        .ros-dispatch-agents{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+        .ros-dispatch-head{padding:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--ros-line)}
+        .ros-dispatch-title{color:var(--ros-text);font-size:15px;font-weight:760;letter-spacing:-.025em}
+        .ros-dispatch-sub{margin-top:3px;color:var(--ros-muted-2);font-size:10px}
+        .ros-dispatch-search{margin:12px 16px 5px;height:38px;display:flex;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--ros-line);border-radius:11px;color:var(--ros-muted-2);background:var(--ros-card)}
+        .ros-dispatch-search input{width:100%;border:0;outline:0;color:var(--ros-text-2);background:transparent;font-size:11px}.ros-dispatch-search input::placeholder{color:var(--ros-muted-2)}
+        .ros-agent-rank-list{flex:1;min-height:0;overflow:auto;padding:8px 16px 16px}
+        .ros-agent-rank{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;margin-bottom:8px;padding:13px;border:1px solid var(--ros-line);border-radius:14px;background:var(--ros-card);transition:.15s ease}
+        .ros-agent-rank:hover{background:var(--ros-card-hover);border-color:var(--ros-line-strong)}.ros-agent-rank.is-best{border-color:color-mix(in srgb,var(--ros-brand) 32%,transparent);background:color-mix(in srgb,var(--ros-brand) 6%,var(--ros-card))}
+        .ros-agent-rank-avatar{width:48px;height:48px;overflow:hidden;display:grid;place-items:center;border-radius:14px;color:var(--ros-blue);background:color-mix(in srgb,var(--ros-blue) 12%,transparent);border:1px solid color-mix(in srgb,var(--ros-blue) 22%,transparent);font-size:12px;font-weight:780}.ros-agent-rank-avatar img{width:100%;height:100%;object-fit:cover}
+        .ros-agent-rank-main{min-width:0}.ros-agent-rank-name-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.ros-agent-rank-name-row strong{color:var(--ros-text);font-size:13px}.ros-agent-rank-email{margin-top:2px;color:var(--ros-muted-2);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ros-best-pill,.ros-current-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:760}.ros-best-pill{color:var(--ros-brand);background:var(--ros-brand-soft);border:1px solid color-mix(in srgb,var(--ros-brand) 24%,transparent)}.ros-current-pill{color:var(--ros-green);background:color-mix(in srgb,var(--ros-green) 10%,transparent);border:1px solid color-mix(in srgb,var(--ros-green) 22%,transparent)}
+        .ros-agent-reasons{margin-top:7px;display:flex;gap:5px;flex-wrap:wrap}.ros-agent-reasons span{display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border-radius:999px;color:var(--ros-muted);background:var(--ros-card);border:1px solid var(--ros-line);font-size:8px;font-weight:650}
+        .ros-agent-coverage{margin-top:7px;max-width:540px;color:var(--ros-muted);font-size:9px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .ros-agent-days{margin-top:8px;display:flex;align-items:center;gap:3px;flex-wrap:wrap}.ros-agent-days>span:not(.ros-agent-meta){min-width:25px;padding:2px 4px;text-align:center;border-radius:5px;color:var(--ros-muted-2);background:var(--ros-card);border:1px solid var(--ros-line);font-size:7px;font-weight:700}.ros-agent-days>span.is-on{color:var(--ros-green);background:color-mix(in srgb,var(--ros-green) 8%,transparent);border-color:color-mix(in srgb,var(--ros-green) 18%,transparent)}.ros-agent-meta{margin-left:4px;color:var(--ros-muted-2);font-size:8px;text-transform:capitalize}
+        .ros-agent-rank-action{display:flex;justify-content:flex-end}.ros-agent-empty{padding:48px 20px;display:flex;flex-direction:column;align-items:center;gap:9px;color:var(--ros-muted-2);font-size:10px}
+        @media(max-width:760px){.ros-dispatch-backdrop{padding:0;place-items:stretch}.ros-dispatch{width:100%;height:100dvh;max-height:none;grid-template-columns:1fr;border:0;border-radius:0;overflow:auto}.ros-dispatch-lead{border-right:0;border-bottom:1px solid var(--ros-line)}.ros-dispatch-lead-body{overflow:visible}.ros-dispatch-agents{overflow:visible}.ros-agent-rank-list{overflow:visible}.ros-agent-rank{grid-template-columns:42px minmax(0,1fr);align-items:start}.ros-agent-rank-avatar{width:42px;height:42px;border-radius:12px}.ros-agent-rank-action{grid-column:1/-1}.ros-agent-rank-action .ros-btn{width:100%}}
+      `}</style>
     </div>
   )
 }
