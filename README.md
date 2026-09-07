@@ -3,6 +3,8 @@
 Full-stack AI-powered rental lead CRM.
 Google Voice & Facebook Marketplace bots → Supabase → Next.js Kanban pipeline.
 
+<!-- production deploy trigger: 2026-09-07 -->
+
 ---
 
 ## Quick boot order
