@@ -1,6 +1,9 @@
-name: Validate Rental OS refresh
+name: Validate Rental OS
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - rental-os-wow-refresh
