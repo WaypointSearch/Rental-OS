@@ -1,0 +1,56 @@
+# Rental OS — Sun Ocean Realty agent CRM
+
+> Rental OS is the private CRM Sun Ocean Realty agents use to work rental leads
+> (tenants looking for a home in South Florida). It requires a login. This file
+> tells AI assistants (Muse, Grok, ChatGPT agents, etc.) how the app is laid
+> out and how to do common tasks safely on an agent's behalf.
+
+## Pages
+- /login — sign in with the agent's email and password.
+- /pipeline — the agent's leads. On a phone it is a list; on a computer it is a
+  Kanban board (switch with the "Kanban" / "List" buttons in the top bar).
+- /profile — the agent's profile: name, phone, license, MLS, showing areas,
+  languages spoken, lead preference, alert preference, weekly availability.
+- /transactions — submit transaction documents ("Docs" in the phone menu).
+- /commission — request a commission payout ("Commission" in the phone menu).
+- /sales — the sales workspace (switch with "Rentals" / "Sales" in the top bar).
+
+## Lead stages (in order)
+1. Waiting for contact
+2. Made Contact
+3. Set showings
+4. Showings complete
+5. Completed Rentspree
+6. Offer Sent
+7. Offer Approved
+8. HOA Approved
+9. Move in / Deposit
+
+## How to do common tasks on /pipeline (phone layout)
+- Find a lead: type in the "Search leads" box (name, phone, area or MLS number),
+  or press a stage button in the "Filter leads by stage" row.
+- Each lead is an item in the "Leads" list, labelled "<name>, stage <stage>",
+  with data-lead-id and data-stage attributes.
+- Call or text: press "Call <name>" or "Text <name>" on the lead.
+- Move a lead forward one stage: press "Move <name> to <next stage>".
+- Open a lead: press "Open lead <name>". In the lead:
+  - "Stage" select changes the stage immediately (saved right away), and
+    "Move to next stage: <stage>" advances it by one.
+  - Budget, Bedrooms, Bathrooms, Move-in Date and Cosigner are labelled text
+    fields; Credit, Pets, Income Proof and Criminal / Eviction are button groups
+    (the selected option has aria-pressed="true"). These edits are NOT saved until
+    you press "Save changes" in the bar at the bottom.
+  - "Agent Notes": type in the field and press "Save Note" (saved right away).
+  - "Upload Document" attaches a file to the lead.
+  - "Close lead" returns to the list.
+- Add a lead: press "Add a new lead" in the bottom "Agent menu".
+
+## Rules for assistants
+- Only act on leads assigned to the signed-in agent; agents cannot see others' leads.
+- Never delete leads or documents, and never change who a lead is assigned to.
+  Those actions are for the broker.
+- Confirm with the agent before moving a lead past "Offer Sent" or uploading documents.
+- Do not paste tenant personal information (SSN, income documents) into other apps.
+
+## Contact
+Broker: Sun Ocean Realty — call or text 954-357-2807.

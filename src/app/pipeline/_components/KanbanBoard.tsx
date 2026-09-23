@@ -16,6 +16,7 @@ import { StatsBar } from './StatsBar'
 import { FilterBar } from './FilterBar'
 import { LeadCreateModal } from './LeadCreateModal'
 import { DispatchModal } from './DispatchModal'
+import { MobileLeadList, MobileLeadsHeader, MobileTabBar } from './MobileAgent'
 import { useLeadsRealtime } from '@/lib/useLeadsRealtime'
 import { useLeadFilter } from '@/lib/useLeadFilter'
 import { useToast, ToastProvider } from '@/lib/useToast'
@@ -155,6 +156,18 @@ function BoardInner({
     if (selected?.id === aId) setSelected(p => p ? { ...p, stage: overStage } : p)
   }
 
+  async function advanceStage(lead: Lead, stage: string) {
+    const previous = lead.stage
+    setLeads(p => p.map(l => l.id === lead.id ? { ...l, stage } : l))
+    const { error } = await supabase.from('leads').update({ stage }).eq('id', lead.id)
+    if (error) {
+      setLeads(p => p.map(l => l.id === lead.id ? { ...l, stage: previous } : l))
+      toast({ type: 'info', title: 'Stage not saved', body: error.message })
+      return
+    }
+    toast({ type: 'success', title: `${lead.name ?? 'Lead'} moved`, body: `→ ${stage}` })
+  }
+
   function handleLeadUpdated(updated: Lead) {
     setLeads(p => p.map(l => l.id === updated.id ? updated : l))
     setSelected(updated)
@@ -190,6 +203,11 @@ function BoardInner({
   }
 
   const avatarUrl = agentProfile?.avatar_url ?? avatarMap[agentEmail] ?? null
+  // While a lead is open full-screen on a phone, the list behind it stays mounted
+  // (keeping its scroll position) but is hidden from assistive tech and AI agents.
+  const backgroundWhileOpen = isMobile && selected
+    ? { 'aria-hidden': true, inert: 'true' } as Record<string, unknown>
+    : {}
   // Drop lower-priority nav labels as the viewport narrows so nothing overlaps
   const navCompact = navWidth < 1200
   const navTight   = navWidth < 1000
@@ -305,7 +323,7 @@ function BoardInner({
             </button>
           )}
 
-          <button onClick={() => setShowCreate(true)} style={{
+          {!isMobile && <button onClick={() => setShowCreate(true)} style={{
             background: 'linear-gradient(135deg, #0550ae, #388bfd)',
             color: '#fff', border: 'none', borderRadius: 6,
             padding: '5px 13px', fontSize: 12, fontWeight: 600,
@@ -313,8 +331,8 @@ function BoardInner({
             display: 'flex', alignItems: 'center', gap: 5,
             boxShadow: '0 2px 8px rgba(56,139,253,0.28)',
           }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{isMobile ? '' : navNarrow ? ' New' : ' New Lead'}
-          </button>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{navNarrow ? ' New' : ' New Lead'}
+          </button>}
 
           {isAdmin && !isMobile && (
             <button onClick={() => exportLeadsToCSV(filtered)} style={{
@@ -327,7 +345,7 @@ function BoardInner({
             </button>
           )}
 
-          <div onClick={() => router.push('/profile')} title="My Profile" style={{
+          {!isMobile && <div onClick={() => router.push('/profile')} title="My Profile" role="link" aria-label="My profile" style={{
             display: 'flex', alignItems: 'center', gap: 6,
             cursor: 'pointer', padding: '4px 8px',
             borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)',
@@ -346,8 +364,8 @@ function BoardInner({
                 : agentEmail.slice(0, 2).toUpperCase()
               }
             </div>
-            {!isMobile && !navCompact && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
-          </div>
+            {!navCompact && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
+          </div>}
 
           {!isMobile && (
             <button onClick={signOut} style={{
@@ -376,29 +394,54 @@ function BoardInner({
             cursor: 'pointer', fontSize: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
-          }} title="Toggle light/dark mode">
+          }} title="Toggle light/dark mode" aria-label="Toggle light or dark mode">
             ◐
           </button>
         </div>
       </nav>
 
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 9, flexShrink: 0 }}>
-        <StatsBar leads={leads} isAdmin={isAdmin} />
-      </div>
+      {isMobile ? (
+        /* ── Mobile: search + stage tabs ─────────────────────────────────── */
+        <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }} {...backgroundWhileOpen}>
+          <MobileLeadsHeader
+            total={leads.length} visible={filtered.length}
+            query={filter.query} stage={filter.stage} leads={leads}
+            onQuery={query => setFilter({ query })}
+            onStage={stage => setFilter({ stage })}
+          />
+        </div>
+      ) : (
+        <>
+          {/* ── Stats ───────────────────────────────────────────────────────── */}
+          <div style={{ position: 'relative', zIndex: 9, flexShrink: 0 }}>
+            <StatsBar leads={leads} isAdmin={isAdmin} />
+          </div>
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }}>
-        <FilterBar
-          filter={filter} agents={agents} isFiltered={isFiltered}
-          onUpdate={setFilter} onReset={resetFilter}
-          totalVisible={filtered.length} totalAll={leads.length}
-        />
-      </div>
+          {/* ── Filters ─────────────────────────────────────────────────────── */}
+          <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }}>
+            <FilterBar
+              filter={filter} agents={agents} isFiltered={isFiltered}
+              onUpdate={setFilter} onReset={resetFilter}
+              totalVisible={filtered.length} totalAll={leads.length}
+            />
+          </div>
+        </>
+      )}
 
       {/* ── Board + Panel ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative', zIndex: 1 }}>
-        {viewMode === 'kanban' ? (
+      {/* No z-index here: it would trap the full-screen mobile lead view beneath the nav */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+        {isMobile ? (
+          <MobileLeadList
+            {...backgroundWhileOpen}
+            leads={filtered}
+            onOpen={lead => setSelected(lead)}
+            onAdvance={advanceStage}
+            emptyText={leads.length === 0
+              ? 'No leads yet. New leads assigned to you will show up here.'
+              : 'No leads match this search or stage.'}
+          />
+        ) : viewMode === 'kanban' ? (
           <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '12px 12px 0', minWidth: 0 }}>
             <DndContext id="pipeline-board"
               sensors={sensors} collisionDetection={closestCorners}
@@ -443,7 +486,7 @@ function BoardInner({
               background: 'rgba(13,16,28,0.95)',
               display: 'flex', alignItems: 'center', gap: 12,
             }}>
-              <button onClick={() => setSelected(null)} style={{
+              <button type="button" onClick={() => setSelected(null)} aria-label="Back to leads" style={{
                 background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
                 color: '#e6edf3', borderRadius: 8, padding: '8px 16px',
                 fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
@@ -460,6 +503,7 @@ function BoardInner({
                 onLeadUpdated={handleLeadUpdated}
                 onDeleteLead={handleDeleteLead}
                 onDispatch={() => openDispatch(selected)}
+                hideClose
               />
             </div>
           </div>
@@ -503,8 +547,10 @@ function BoardInner({
         />
       )}
 
-      {/* Live dot */}
-      <div style={{
+      {isMobile && !selected && <MobileTabBar onNewLead={() => setShowCreate(true)} />}
+
+      {/* Live dot (hidden while the lead panel is open so it never covers the save bar) */}
+      {!isMobile && !selected && <div style={{
         position: 'fixed', bottom: 14, right: 16, zIndex: 20,
         display: 'flex', alignItems: 'center', gap: 6,
         background: 'rgba(13,16,28,0.85)',
@@ -519,7 +565,7 @@ function BoardInner({
         }} />
         Live
         <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}`}</style>
-      </div>
+      </div>}
     </div>
   )
 }
