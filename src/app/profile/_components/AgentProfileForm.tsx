@@ -25,6 +25,15 @@ const CARRIERS = [
   ['other', 'Other / Unknown'],
 ] as const
 
+const COMMON_LANGUAGES = [
+  'English', 'Spanish', 'Portuguese', 'Haitian Creole', 'French',
+  'Russian', 'Italian', 'Hebrew', 'German', 'Mandarin', 'Arabic',
+]
+
+function normalizedLanguages(value?: string[] | null): string[] {
+  return Array.isArray(value) ? value.filter(item => typeof item === 'string' && item.trim()) : []
+}
+
 function normalizedAvailability(value?: Availability | null): Availability {
   const source = value ?? DEFAULT_AVAILABILITY
   return DAYS.reduce((next, day) => {
@@ -60,6 +69,8 @@ export function AgentProfileForm({
   const [mlsAffiliation, setMlsAffiliation] = useState(profile?.mls_affiliation ?? 'no_mls')
   const [alertPreference, setAlertPreference] = useState<'email' | 'text' | 'both'>(profile?.alert_preference ?? 'email')
   const [alertCarrier, setAlertCarrier] = useState(profile?.alert_carrier ?? 'verizon')
+  const [languages, setLanguages] = useState<string[]>(() => normalizedLanguages(profile?.languages))
+  const [languageDraft, setLanguageDraft] = useState('')
   const [availability, setAvailability] = useState<Availability>(() => normalizedAvailability(profile?.availability))
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? null)
   const [uploading, setUploading] = useState(false)
@@ -87,6 +98,21 @@ export function AgentProfileForm({
     } finally {
       setUploading(false)
     }
+  }
+
+  function toggleLanguage(language: string) {
+    setLanguages(previous => previous.some(item => item.toLowerCase() === language.toLowerCase())
+      ? previous.filter(item => item.toLowerCase() !== language.toLowerCase())
+      : [...previous, language])
+  }
+
+  function addLanguage() {
+    const language = languageDraft.trim().replace(/\s+/g, ' ')
+    if (!language) return
+    if (!languages.some(item => item.toLowerCase() === language.toLowerCase())) {
+      setLanguages(previous => [...previous, language])
+    }
+    setLanguageDraft('')
   }
 
   function toggleDay(day: DayKey) {
@@ -130,13 +156,26 @@ export function AgentProfileForm({
       alert_preference: alertPreference,
       alert_carrier: alertCarrier,
       availability,
+      languages,
     }
 
-    const result = profile
-      ? await supabase.from('agent_profiles').update(values).eq('id', userId)
-      : await supabase.from('agent_profiles').insert({ id: userId, email: userEmail, is_admin: false, ...values })
+    const write = (payload: Partial<typeof values>) => profile
+      ? supabase.from('agent_profiles').update(payload).eq('id', userId)
+      : supabase.from('agent_profiles').insert({ id: userId, email: userEmail, is_admin: false, ...payload })
+
+    let result = await write(values)
+    let languagesSkipped = false
+    // Environments that have not run supabase-agent-languages.sql yet lack the column;
+    // save everything else instead of failing the whole profile.
+    if (result.error && /languages/i.test(result.error.message)) {
+      const withoutLanguages: Partial<typeof values> = { ...values }
+      delete withoutLanguages.languages
+      result = await write(withoutLanguages)
+      languagesSkipped = !result.error
+    }
 
     if (result.error) setNotice({ kind: 'error', text: result.error.message })
+    else if (languagesSkipped) setNotice({ kind: 'error', text: 'Profile saved, but languages could not be stored yet. Ask the broker to run the languages database update.' })
     else setNotice({ kind: 'success', text: 'Profile saved. Broker routing now uses these preferences.' })
     setSaving(false)
   }
@@ -171,7 +210,7 @@ export function AgentProfileForm({
             <div className={styles.grid2}>
               <div className={styles.field}><label>Full Name <span className={styles.required}>required</span></label><input value={fullName} onChange={event => setFullName(event.target.value)}/></div>
               <div className={`${styles.field} ${styles.readonly}`}><label>Email</label><input value={userEmail} readOnly/></div>
-              <div className={styles.field}><label>Phone Number <span>for SMS lead alerts</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
+              <div className={styles.field}><label>Phone Number <span className={styles.hint}>for SMS lead alerts</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
               <div className={styles.field}><label>Florida License Number <span className={styles.required}>required</span></label><input value={licenseNumber} onChange={event => setLicenseNumber(event.target.value)} placeholder="SL1234567"/></div>
             </div>
           </section>
@@ -188,6 +227,26 @@ export function AgentProfileForm({
           <section className={styles.card}>
             <div className={styles.cardHead}><strong>Showing Areas</strong><span>Tell the broker where you are willing to show properties. This feeds the assignment match.</span></div>
             <div className={styles.field}><textarea value={showingAreas} onChange={event => setShowingAreas(event.target.value)} placeholder="e.g. Hollywood, Fort Lauderdale, Pembroke Pines, all East Broward, Boca Raton…"/></div>
+          </section>
+
+          <section className={styles.card}>
+            <div className={styles.cardHead}><strong>Languages Spoken</strong><span>Select every language you can work with clients in. The broker uses this to match leads.</span></div>
+            <div className={styles.languages}>
+              {[...COMMON_LANGUAGES, ...languages.filter(item => !COMMON_LANGUAGES.some(common => common.toLowerCase() === item.toLowerCase()))].map(language => {
+                const active = languages.some(item => item.toLowerCase() === language.toLowerCase())
+                return <button type="button" key={language} aria-pressed={active} className={`${styles.language} ${active ? styles.active : ''}`} onClick={() => toggleLanguage(language)}>{active ? '✓ ' : ''}{language}</button>
+              })}
+            </div>
+            <div className={styles.addLanguage}>
+              <input
+                value={languageDraft}
+                onChange={event => setLanguageDraft(event.target.value)}
+                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addLanguage() } }}
+                placeholder="Add another language, e.g. Polish"
+                aria-label="Add another language"
+              />
+              <button type="button" onClick={addLanguage} disabled={!languageDraft.trim()}>Add</button>
+            </div>
           </section>
 
           <section className={styles.card}>

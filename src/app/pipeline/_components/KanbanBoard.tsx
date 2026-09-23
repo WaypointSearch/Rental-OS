@@ -22,6 +22,7 @@ import { useToast, ToastProvider } from '@/lib/useToast'
 import { exportLeadsToCSV } from '@/lib/exportCSV'
 import { getSupabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -46,6 +47,7 @@ function BoardInner({
   const [viewMode,    setViewMode]    = useState<'kanban' | 'list'>('kanban')
   const [avatarMap,   setAvatarMap]   = useState(initAvatarMap)
   const [isMobile,    setIsMobile]    = useState(false)
+  const [navWidth,    setNavWidth]    = useState(1440)
   // Dispatch modal state (admin-only)
   const [dispatchLead, setDispatchLead] = useState<Lead | null>(null)
   const [allAgents,    setAllAgents]    = useState<AgentProfile[]>([])
@@ -55,6 +57,7 @@ function BoardInner({
     const check = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
+      setNavWidth(window.innerWidth)
       if (mobile && viewMode === 'kanban') setViewMode('list')
     }
     check()
@@ -187,6 +190,10 @@ function BoardInner({
   }
 
   const avatarUrl = agentProfile?.avatar_url ?? avatarMap[agentEmail] ?? null
+  // Drop lower-priority nav labels as the viewport narrows so nothing overlaps
+  const navCompact = navWidth < 1200
+  const navTight   = navWidth < 1000
+  const navNarrow  = navWidth < 900
 
   return (
     <div style={{
@@ -228,7 +235,7 @@ function BoardInner({
               <path d="M4 17 Q10 13 16 17" stroke="white" strokeWidth="1.5" fill="none" opacity="0.6" strokeLinecap="round"/>
             </svg>
           </div>
-          {!isMobile && (
+          {!isMobile && !navTight && (
             <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.3px', color: '#f0f6fc' }}>
               Sun Ocean<span style={{ color: '#f5a623', marginLeft: 4 }}>Realty</span>
             </span>
@@ -242,7 +249,24 @@ function BoardInner({
           )}
         </div>
 
-        {/* Centre: view toggle — hide on mobile */}
+        {/* Centre: workspace switch + view toggle (view toggle hidden on mobile) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div aria-label="CRM workspace" style={{
+            display: 'flex',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 8, padding: 3, gap: 2,
+          }}>
+            <span style={{
+              background: 'rgba(56,139,253,0.22)', border: '0.5px solid rgba(56,139,253,0.4)',
+              color: '#388bfd', borderRadius: 5, padding: isMobile ? '4px 9px' : '4px 12px',
+              fontSize: 12, fontWeight: 600,
+            }}>Rentals</span>
+            <Link href="/sales" style={{
+              border: '0.5px solid transparent', color: '#6e7681', borderRadius: 5,
+              padding: isMobile ? '4px 9px' : '4px 12px', fontSize: 12, textDecoration: 'none',
+            }}>Sales</Link>
+          </div>
         {!isMobile && (
           <div style={{
             display: 'flex',
@@ -251,30 +275,31 @@ function BoardInner({
             borderRadius: 8, padding: 3, gap: 2,
           }}>
             {(['kanban', 'list'] as const).map(mode => (
-              <button key={mode} onClick={() => setViewMode(mode)} style={{
+              <button key={mode} onClick={() => setViewMode(mode)} title={mode === 'kanban' ? 'Kanban view' : 'List view'} style={{
                 background: viewMode === mode ? 'rgba(56,139,253,0.22)' : 'transparent',
                 border: viewMode === mode ? '0.5px solid rgba(56,139,253,0.4)' : '0.5px solid transparent',
                 color: viewMode === mode ? '#388bfd' : '#6e7681',
-                borderRadius: 5, padding: '4px 12px',
+                borderRadius: 5, padding: navNarrow ? '4px 9px' : '4px 12px', whiteSpace: 'nowrap',
                 fontSize: 12, fontWeight: viewMode === mode ? 600 : 400,
                 cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
               }}>
-                {mode === 'kanban' ? '⊞ Kanban' : '☰ List'}
+                {mode === 'kanban' ? (navNarrow ? '⊞' : '⊞ Kanban') : (navNarrow ? '☰' : '☰ List')}
               </button>
             ))}
           </div>
         )}
+        </div>
 
         {/* Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, flexShrink: 0 }}>
-          {!isMobile && <span style={{ fontSize: 12, color: '#6e7681' }}>{leads.length} leads</span>}
+          {!isMobile && !navCompact && <span style={{ fontSize: 12, color: '#6e7681' }}>{leads.length} leads</span>}
 
           {isAdmin && !isMobile && (
             <button onClick={() => router.push('/admin')} style={{
               background: 'rgba(163,113,247,0.1)',
               border: '0.5px solid rgba(163,113,247,0.3)',
               color: '#a371f7', padding: '5px 11px', borderRadius: 6,
-              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
             }}>
               God Mode
             </button>
@@ -288,7 +313,7 @@ function BoardInner({
             display: 'flex', alignItems: 'center', gap: 5,
             boxShadow: '0 2px 8px rgba(56,139,253,0.28)',
           }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{isMobile ? '' : ' New Lead'}
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{isMobile ? '' : navNarrow ? ' New' : ' New Lead'}
           </button>
 
           {isAdmin && !isMobile && (
@@ -321,13 +346,13 @@ function BoardInner({
                 : agentEmail.slice(0, 2).toUpperCase()
               }
             </div>
-            {!isMobile && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
+            {!isMobile && !navCompact && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
           </div>
 
           {!isMobile && (
             <button onClick={signOut} style={{
               background: 'none', border: 'none', color: '#6e7681',
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
             }}>
               Sign out
             </button>
@@ -375,13 +400,13 @@ function BoardInner({
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative', zIndex: 1 }}>
         {viewMode === 'kanban' ? (
           <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '12px 12px 0', minWidth: 0 }}>
-            <DndContext
+            <DndContext id="pipeline-board"
               sensors={sensors} collisionDetection={closestCorners}
               onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
             >
               <div style={{
                 display: 'flex', gap: 10, height: '100%',
-                minWidth: 'max-content', alignItems: 'stretch', paddingBottom: 12,
+                minWidth: 'max-content', alignItems: 'stretch', paddingBottom: 56,
               }}>
                 {STAGES.map(stage => (
                   <StageColumn key={stage} stage={stage}

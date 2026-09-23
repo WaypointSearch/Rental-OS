@@ -47,6 +47,7 @@ export interface AgentProfile {
   showing_areas?: string | null
   lead_preference?: 'showing_only' | 'full_service' | 'both' | string | null
   mls_affiliation?: 'beaches_mls' | 'miami_mls' | 'no_mls' | string | null
+  languages?: string[] | null
 }
 
 export const DEFAULT_AVAILABILITY: Availability = {

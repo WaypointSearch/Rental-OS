@@ -121,7 +121,7 @@ export function DispatchModal({ lead, agents, onClose, onAssigned }: DispatchMod
   const ranked = useMemo(() => agents
     .map(agent => rankAgent(agent, lead))
     .filter(agent => {
-      const haystack = normalize(`${agent.full_name} ${agent.email} ${agent.showing_areas} ${agent.mls_affiliation}`)
+      const haystack = normalize(`${agent.full_name} ${agent.email} ${agent.showing_areas} ${agent.mls_affiliation} ${(agent.languages ?? []).join(' ')}`)
       return !query.trim() || haystack.includes(normalize(query))
     })
     .sort((a, b) => b.score - a.score || (a.full_name ?? a.email).localeCompare(b.full_name ?? b.email)),
@@ -254,6 +254,10 @@ export function DispatchModal({ lead, agents, onClose, onAssigned }: DispatchMod
 
                     {agent.showing_areas && (
                       <div className="ros-agent-coverage">{agent.showing_areas}</div>
+                    )}
+
+                    {agent.languages && agent.languages.length > 0 && (
+                      <div className="ros-agent-coverage">Speaks {agent.languages.join(', ')}</div>
                     )}
 
                     <div className="ros-agent-days">
