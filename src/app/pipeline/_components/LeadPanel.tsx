@@ -2,7 +2,8 @@
 
 import { useState, useRef, useId } from 'react'
 import { ArrowRight, MessageSquare, Phone } from 'lucide-react'
-import { Lead, STAGES, STAGE_COLORS, Note, LeadDocument } from '@/types/lead'
+import { ASSIGNMENT_TYPES, Lead, STAGES, STAGE_COLORS, Note, LeadDocument } from '@/types/lead'
+import { AssignmentTypeBadge } from './AssignmentTypeBadge'
 import { getSupabase } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { CityAutocomplete } from './CityAutocomplete'
@@ -349,6 +350,7 @@ export function LeadPanel({
           }}>
             {lead.stage}
           </span>
+          {!isUnassigned && <AssignmentTypeBadge type={lead.assignment_type} long />}
           {isAdmin && lead.source && (
             <span style={{
               fontSize: 10,
@@ -384,21 +386,34 @@ export function LeadPanel({
                 ? 'linear-gradient(135deg, #0550ae, #388bfd)'
                 : 'rgba(56,139,253,0.1)',
               border: `1px solid ${isUnassigned ? 'transparent' : 'rgba(56,139,253,0.3)'}`,
-              color: '#fff', borderRadius: 8, padding: '7px 0',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              color: '#fff', borderRadius: 8, padding: '10px 0', minHeight: 40,
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
               boxShadow: isUnassigned ? '0 2px 8px rgba(56,139,253,0.25)' : 'none',
             }}
           >
-            {isUnassigned ? '⚡ Assign to Agent' : `↺ Reassign (${(lead.assigned_agent ?? '').split('@')[0]})`}
+            {isUnassigned ? '⚡ Assign to Agent' : `↺ Reassign or change type (${(lead.assigned_agent ?? '').split('@')[0]})`}
           </button>
         )}
 
-        {/* Agent: read-only assigned agent */}
+        {/* Agent: read-only assigned agent + what the assignment type means */}
         {!isAdmin && (
-          <div style={{ marginTop: 8, fontSize: 12, color: C.dim }}>
+          <div style={{ marginTop: 10, fontSize: 13, color: C.dim }}>
             Assigned to: <span style={{ color: C.sub, fontWeight: 500 }}>
               {(lead.assigned_agent ?? 'Unassigned').split('@')[0]}
             </span>
+            {lead.assignment_type && ASSIGNMENT_TYPES[lead.assignment_type] && (
+              <div style={{
+                marginTop: 8, padding: '9px 11px', borderRadius: 9, lineHeight: 1.45,
+                color: C.sub, fontSize: 13,
+                background: `${ASSIGNMENT_TYPES[lead.assignment_type].color}14`,
+                border: `1px solid ${ASSIGNMENT_TYPES[lead.assignment_type].color}40`,
+              }}>
+                <strong style={{ color: ASSIGNMENT_TYPES[lead.assignment_type].color }}>
+                  {ASSIGNMENT_TYPES[lead.assignment_type].label} · {ASSIGNMENT_TYPES[lead.assignment_type].pay}
+                </strong>
+                <div>{ASSIGNMENT_TYPES[lead.assignment_type].detail}</div>
+              </div>
+            )}
           </div>
         )}
       </div>

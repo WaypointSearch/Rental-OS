@@ -54,3 +54,24 @@
 
 ## Contact
 Broker: Sun Ocean Realty — call or text 954-357-2807.
+
+## API for AI dispatch agents
+Base URL: this site. Every request needs `Authorization: Bearer <AI_AGENT_API_KEY>`
+(the broker gives this key to the AI agent; it is never shown in the app).
+
+- `GET /api/agent/agents` — all agents with showing_areas, languages,
+  lead_preference (showing_only | full_service | both), mls_affiliation and
+  weekly availability. Use it to choose who gets a lead.
+- `GET /api/agent/leads?status=unassigned|all&limit=50` — leads, newest first.
+- `POST /api/agent/leads` — create a lead (or update it if the phone already exists).
+  Body: `{ "name", "phone", "budget", "bedrooms", "bathrooms", "move_in", "area",
+  "pets", "credit", "income", "notes_crm" (summary), ... ,
+  "assign": { "agentEmail": "agent@…", "type": "full" | "showing" } }`
+  `assign` is optional; when present the lead is assigned in the same call.
+- `POST /api/agent/leads/{id}/assign` — body `{ "agentEmail", "type": "full" | "showing" }`.
+  Lead ids are the phone number digits.
+
+Assignment types: "full" = agent works the lead start to finish (60% commission);
+"showing" = agent only shows the property ($250 per closed showing). Match the
+type to the agent's lead_preference. Every assignment automatically emails and
+texts the agent; the response's `notified` field says what was sent.

@@ -5,6 +5,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { ArrowRight, FileUp, HandCoins, LayoutList, MessageSquare, Phone, Plus, Search, UserRound } from 'lucide-react'
 import { Lead, STAGES, STAGE_COLORS } from '@/types/lead'
 import styles from './mobile.module.css'
+import { AssignmentTypeBadge } from './AssignmentTypeBadge'
 
 export function nextStage(stage: string): string | null {
   const index = STAGES.indexOf(stage as (typeof STAGES)[number])
@@ -83,7 +84,10 @@ export function MobileLeadList({
                 <span className={styles.name}>{name}</span>
                 <span className={styles.age}>{formatDistanceToNowStrict(new Date(lead.created_at), { addSuffix: true })}</span>
               </div>
-              <div className={styles.stage}>{lead.stage}</div>
+              <div className={styles.stageRow}>
+                <span className={styles.stage}>{lead.stage}</span>
+                <AssignmentTypeBadge type={lead.assignment_type} long />
+              </div>
               <div className={styles.facts}>
                 {lead.budget && <span>{lead.budget}</span>}
                 {lead.bedrooms && <span>{lead.bedrooms} bd{lead.bathrooms ? ` / ${lead.bathrooms} ba` : ''}</span>}

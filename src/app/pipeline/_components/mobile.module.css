@@ -18,7 +18,7 @@
 .nameRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 .name{font-size:17px;font-weight:700;color:#f0f6fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .age{font-size:12px;color:#8b949e;flex:0 0 auto}
-.stage{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:650;color:var(--accent);margin-bottom:8px}
+.stageRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.stage{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:650;color:var(--accent)}
 .stage:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .facts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:#c9d1d9}
 .facts span{white-space:nowrap}

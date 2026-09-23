@@ -6,7 +6,7 @@ import {
   PointerSensor, useSensor, useSensors, DragOverlay, closestCorners,
 } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable'
-import { Lead, STAGES } from '@/types/lead'
+import { ASSIGNMENT_TYPES, Lead, STAGES } from '@/types/lead'
 import { AgentProfile } from '@/types/agent'
 import { StageColumn } from './StageColumn'
 import { LeadPanel } from './LeadPanel'
@@ -190,11 +190,13 @@ function BoardInner({
     toast({ type: 'info', title: 'Lead deleted' })
   }
 
-  function handleAssigned(updatedLead: Lead, agentEmail: string) {
+  function handleAssigned(updatedLead: Lead, agentEmail: string, warning?: string) {
     setLeads(p => p.map(l => l.id === updatedLead.id ? updatedLead : l))
     setDispatchLead(null)
     setSelected(updatedLead)
-    toast({ type: 'success', title: 'Lead assigned', body: `→ ${agentEmail.split('@')[0]}` })
+    const type = updatedLead.assignment_type ? ` as ${ASSIGNMENT_TYPES[updatedLead.assignment_type].label.toLowerCase()}` : ''
+    toast({ type: 'success', title: 'Lead assigned', body: `→ ${agentEmail.split('@')[0]}${type}` })
+    if (warning) toast({ type: 'info', title: 'Heads up', body: warning, duration: 10000 })
   }
 
   async function signOut() {

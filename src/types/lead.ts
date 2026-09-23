@@ -35,8 +35,29 @@ export interface Lead {
   documents: LeadDocument[]
   stage: string
   assigned_agent: string
+  /** How the lead was handed to the agent. Null on leads assigned before this existed. */
+  assignment_type?: AssignmentType | null
   notes: Note[]
   created_at: string
+}
+
+export type AssignmentType = 'full' | 'showing'
+
+export const ASSIGNMENT_TYPES: Record<AssignmentType, { label: string; short: string; pay: string; detail: string; color: string }> = {
+  full: {
+    label: 'Full lead',
+    short: 'Full',
+    pay: '60% commission',
+    detail: 'Agent works the lead start to finish: showings, application, offer and move-in.',
+    color: '#5aa9ff',
+  },
+  showing: {
+    label: 'Showing only',
+    short: 'Showing',
+    pay: '$250 per closed showing',
+    detail: 'Agent shows the property; the brokerage handles the application and offer.',
+    color: '#f5a623',
+  },
 }
 
 export const STAGES = [

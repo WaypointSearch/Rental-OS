@@ -30,6 +30,8 @@ npm run dev
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` for dev, your Vercel URL for prod |
 | `RESEND_API_KEY` | resend.com → API Keys → Create Key |
+| `AI_AGENT_API_KEY` | Any random string of 24+ characters. Give it to the AI agent that adds and assigns leads (see `public/llms.txt`). Leave unset to turn the AI API off. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Twilio console. Sends real text messages on assignment (or set `TWILIO_MESSAGING_SERVICE_SID` instead of the from number). Without Twilio, texts go through the agent's carrier gateway (not AT&T). |
 | `ADMIN_EMAIL` | Your email — receives new-lead alerts |
 | `WEBHOOK_SECRET` | Run `openssl rand -hex 32` and paste the result |
 
