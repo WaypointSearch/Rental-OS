@@ -64,8 +64,8 @@ EN before following them. Stored data (stages, notes) is always in English.
 Broker: Sun Ocean Realty — call or text 954-357-2807.
 
 ## API for AI dispatch agents
-Base URL: this site. Every request needs `Authorization: Bearer <AI_AGENT_API_KEY>`
-(the broker gives this key to the AI agent; it is never shown in the app).
+Base URL: this site. Every request needs `Authorization: Bearer <AI agent key>`
+(the broker creates it in God Mode → Settings and gives it to the AI agent).
 
 - `GET /api/agent/agents` — all agents with showing_areas, languages,
   lead_preference (showing_only | full_service | both), mls_affiliation and

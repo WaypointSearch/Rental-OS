@@ -26,6 +26,9 @@ const CARRIERS = [
   ['other', 'Other / Unknown'],
 ] as const
 
+// Carriers with an email-to-text gateway (see lib/notifyAssignment.ts)
+const CARRIER_HAS_GATEWAY = new Set<string>(['verizon', 'tmobile', 'sprint', 'googlefi', 'metropcs', 'cricket'])
+
 const COMMON_LANGUAGES = [
   'English', 'Spanish', 'Portuguese', 'Haitian Creole', 'French',
   'Russian', 'Italian', 'Hebrew', 'German', 'Mandarin', 'Arabic',
@@ -69,8 +72,7 @@ export function AgentProfileForm({
   const [showingAreas, setShowingAreas] = useState(profile?.showing_areas ?? '')
   const [leadPreference, setLeadPreference] = useState(profile?.lead_preference ?? 'both')
   const [mlsAffiliation, setMlsAffiliation] = useState(profile?.mls_affiliation ?? 'no_mls')
-  const [alertPreference, setAlertPreference] = useState<'email' | 'text' | 'both'>(profile?.alert_preference ?? 'email')
-  const [alertCarrier, setAlertCarrier] = useState(profile?.alert_carrier ?? 'verizon')
+  const [alertCarrier, setAlertCarrier] = useState<string>(profile?.alert_carrier ?? '')
   const [languages, setLanguages] = useState<string[]>(() => normalizedLanguages(profile?.languages))
   const [languageDraft, setLanguageDraft] = useState('')
   const [availability, setAvailability] = useState<Availability>(() => normalizedAvailability(profile?.availability))
@@ -142,7 +144,7 @@ export function AgentProfileForm({
       setNotice({ kind: 'error', text: t('profile.errLicense') })
       return
     }
-    if (alertPreference !== 'email' && !alertPhone.trim()) {
+    if (alertCarrier && alertCarrier !== 'other' && !alertPhone.trim()) {
       setNotice({ kind: 'error', text: t('profile.errPhone') })
       return
     }
@@ -155,8 +157,9 @@ export function AgentProfileForm({
       showing_areas: showingAreas.trim() || null,
       lead_preference: leadPreference,
       mls_affiliation: mlsAffiliation,
-      alert_preference: alertPreference,
-      alert_carrier: alertCarrier,
+      // Every assignment is emailed; it's also texted when a carrier + phone are set
+      alert_preference: alertPhone.trim() && CARRIER_HAS_GATEWAY.has(alertCarrier) ? 'both' : 'email',
+      alert_carrier: alertCarrier || null,
       availability,
       languages,
     }
@@ -267,16 +270,10 @@ export function AgentProfileForm({
 
           <section className={styles.card}>
             <div className={styles.cardHead}><strong>{t('profile.alerts')}</strong><span>{t('profile.alertsHint')}</span></div>
-            <div className={styles.choices}>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'email' ? styles.activeBlue : ''}`} onClick={() => setAlertPreference('email')}><strong>{t('profile.emailOnly')}</strong><small>{t('profile.emailOnlyHint')}</small></button>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'text' ? styles.activeGold : ''}`} onClick={() => setAlertPreference('text')}><strong>{t('profile.textOnly')}</strong><small>{t('profile.textOnlyHint')}</small></button>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setAlertPreference('both')}><strong>{t('profile.both')}</strong><small>{t('profile.bothEmailText')}</small></button>
-            </div>
-            {alertPreference !== 'email' && (
-              <div className={styles.carriers}>
+            {alertCarrier === 'att' && <p className={styles.carrierNote}>{t('profile.attNote')}</p>}
+            <div className={styles.carriers}>
                 {CARRIERS.map(([value, label]) => <button type="button" key={value} className={`${styles.carrier} ${alertCarrier === value ? styles.active : ''}`} onClick={() => setAlertCarrier(value)}>{label}</button>)}
               </div>
-            )}
           </section>
 
           <section className={styles.card}>

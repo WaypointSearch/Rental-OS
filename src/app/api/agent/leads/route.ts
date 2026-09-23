@@ -14,7 +14,7 @@ const LEAD_FIELDS = [
  * Lists leads, newest first (default: unassigned only).
  */
 export async function GET(req: NextRequest) {
-  const denied = requireAgentKey(req)
+  const denied = await requireAgentKey(req)
   if (denied) return denied
 
   const status = req.nextUrl.searchParams.get('status') ?? 'unassigned'
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
  * "assign", also assigns it and emails + texts the agent.
  */
 export async function POST(req: NextRequest) {
-  const denied = requireAgentKey(req)
+  const denied = await requireAgentKey(req)
   if (denied) return denied
 
   const body = await req.json().catch(() => null)

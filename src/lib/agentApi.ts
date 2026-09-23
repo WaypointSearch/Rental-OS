@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AssignmentType, Lead } from '@/types/lead'
 import { notifyAgentOfAssignment, NotifyResult } from '@/lib/notifyAssignment'
+import { getSetting } from '@/lib/appSettings'
 
 /**
  * Shared pieces of the AI dispatch API (/api/agent/*). An AI agent (Muse, Grok,
@@ -12,10 +13,10 @@ import { notifyAgentOfAssignment, NotifyResult } from '@/lib/notifyAssignment'
 export const AI_ASSIGNER = 'Sun Ocean AI Dispatch'
 
 /** Returns an error response when the request isn't authorized, otherwise null. */
-export function requireAgentKey(req: NextRequest): NextResponse | null {
-  const expected = process.env.AI_AGENT_API_KEY
+export async function requireAgentKey(req: NextRequest): Promise<NextResponse | null> {
+  const { value: expected } = await getSetting('ai_agent_api_key')
   if (!expected || expected.length < 24) {
-    return NextResponse.json({ error: 'AI API is disabled: set AI_AGENT_API_KEY (24+ characters) on the server.' }, { status: 503 })
+    return NextResponse.json({ error: 'AI API is off: create an AI agent key in God Mode → Settings.' }, { status: 503 })
   }
   const given = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
   const a = Buffer.from(given)

@@ -8,7 +8,7 @@ import { requireAgentKey } from '@/lib/agentApi'
  * lead preference, MLS and weekly availability. No tax, ID or admin fields.
  */
 export async function GET(req: NextRequest) {
-  const denied = requireAgentKey(req)
+  const denied = await requireAgentKey(req)
   if (denied) return denied
 
   const admin = createAdminClient()

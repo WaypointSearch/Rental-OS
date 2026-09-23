@@ -8,7 +8,7 @@ import { AI_ASSIGNER, assignLead, parseAssignmentType, requireAgentKey } from '@
  * Assigns (or reassigns) the lead and emails + texts the agent.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = requireAgentKey(req)
+  const denied = await requireAgentKey(req)
   if (denied) return denied
 
   const { id } = await params

@@ -204,8 +204,8 @@ export const en = {
   "profile.showingPay": "$250/showing",
   "profile.fullLeads": "Full Leads",
   "profile.both": "Both",
-  "profile.alerts": "Lead Alert Preference",
-  "profile.alertsHint": "Choose how you want to receive new assignment notifications.",
+  "profile.alerts": "New Lead Alerts",
+  "profile.alertsHint": "Every new lead is emailed to you. Pick your phone carrier to also get it as a text.",
   "profile.emailOnly": "Email Only",
   "profile.emailOnlyHint": "Inbox alert",
   "profile.textOnly": "Text Only",
@@ -373,6 +373,7 @@ export const en = {
   "pw.set": "Set password",
   "pw.h1b": "the team.",
   "pw.open": "Open Rental OS",
+  "profile.attNote": "AT&T no longer delivers email-to-text, so you'll get new leads by email only.",
 } as const
 
 export type TranslationKey = keyof typeof en
@@ -570,7 +571,7 @@ export const es: Record<TranslationKey, string> = {
   "profile.fullLeads": "Clientes completos",
   "profile.both": "Ambos",
   "profile.alerts": "Alertas de clientes nuevos",
-  "profile.alertsHint": "Elige cómo quieres recibir las alertas de asignación.",
+  "profile.alertsHint": "Cada cliente nuevo te llega por correo. Elige tu compañía telefónica para recibirlo también como mensaje de texto.",
   "profile.emailOnly": "Solo correo",
   "profile.emailOnlyHint": "Alerta en tu correo",
   "profile.textOnly": "Solo mensaje",
@@ -738,6 +739,7 @@ export const es: Record<TranslationKey, string> = {
   "pw.set": "Guardar contraseña",
   "pw.h1b": "al equipo.",
   "pw.open": "Abrir Rental OS",
+  "profile.attNote": "AT&T ya no entrega mensajes por correo, así que recibirás los clientes nuevos solo por correo.",
 }
 
 /** Stage names are stored in English; these are for display only. */

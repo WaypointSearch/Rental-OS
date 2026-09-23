@@ -3,22 +3,18 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ASSIGNMENT_TYPES, AssignmentType, Lead } from '@/types/lead'
 
 /**
- * Tells an agent they have a new lead: a branded email plus a text message.
- * Used by both the broker's Assign screen (/api/send-assignment) and the AI
- * dispatch API (/api/agent/*), so every assignment looks the same.
+ * Tells an agent they have a new lead: a branded email, plus a short email sent
+ * to their carrier's email-to-text gateway (the carrier chosen on their profile)
+ * so it lands on their phone as a text. Used by both the broker's Assign screen
+ * (/api/send-assignment) and the AI dispatch API (/api/agent/*).
  *
- * Env:
- *   RESEND_API_KEY                     email (required for any notification)
- *   NEXT_PUBLIC_SITE_URL               link back to the CRM
- *   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER (or
- *   TWILIO_MESSAGING_SERVICE_SID)      real SMS; without them the text goes
- *                                      through the agent's carrier gateway
+ * Env: RESEND_API_KEY (required to send anything), NEXT_PUBLIC_SITE_URL (links).
  */
 
 const FROM_EMAIL = process.env.ASSIGNMENT_FROM_EMAIL ?? 'Sun Ocean Realty <noreply@rentalosnoreply.com>'
 
-// Email-to-SMS gateways, used only when Twilio isn't configured. AT&T shut its
-// gateway down in 2025, so AT&T agents need Twilio to get texts.
+// Carrier email-to-text gateways (keys match the carriers on the profile page).
+// AT&T shut its gateway down in 2025, so AT&T agents get the email only.
 const CARRIER_GATEWAYS: Record<string, string> = {
   verizon: 'vtext.com',
   tmobile: 'tmomail.net',
@@ -172,28 +168,6 @@ export function renderAssignmentSms(lead: Lead, type: AssignmentType | null) {
   return `Sun Ocean Realty: ${info ? `${info.label} (${info.pay})` : 'New lead'} assigned to you. ${lead.name ?? 'New tenant'} · ${facts}. Open: ${siteUrl()}/pipeline`
 }
 
-async function sendTwilio(to: string, body: string): Promise<string | null> {
-  const sid = process.env.TWILIO_ACCOUNT_SID
-  const token = process.env.TWILIO_AUTH_TOKEN
-  const from = process.env.TWILIO_FROM_NUMBER
-  const service = process.env.TWILIO_MESSAGING_SERVICE_SID
-  if (!sid || !token || (!from && !service)) return 'not configured'
-  const form = new URLSearchParams({ To: to, Body: body })
-  if (service) form.set('MessagingServiceSid', service)
-  else form.set('From', from as string)
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: form,
-  })
-  if (response.ok) return null
-  const payload = await response.json().catch(() => ({}))
-  throw new Error(`Twilio ${response.status}: ${payload.message ?? 'send failed'}`)
-}
-
 export async function notifyAgentOfAssignment({
   supabase, lead, agentEmail, assignmentType, assignedBy,
 }: {
@@ -225,34 +199,22 @@ export async function notifyAgentOfAssignment({
     else result.email = 'sent'
   }
 
-  // ── Text ──
-  const sms = renderAssignmentSms(lead, assignmentType)
-  const e164 = toE164(agent.alert_phone)
-  if (!e164) {
-    result.detail.push('text skipped: agent has no valid phone on their profile')
+  // ── Text (email to the carrier's email-to-text gateway) ──
+  const phone = digits(toE164(agent.alert_phone)).slice(-10)
+  const gateway = agent.alert_carrier ? CARRIER_GATEWAYS[agent.alert_carrier] : undefined
+  if (!resend) return result
+  if (phone.length !== 10) {
+    result.detail.push('text skipped: no valid phone number on the agent profile')
     return result
   }
-  try {
-    const twilio = await sendTwilio(e164, sms)
-    if (twilio === null) {
-      result.text = 'sent'
-      return result
-    }
-    // Twilio not configured: fall back to the carrier's email-to-text gateway
-    const gateway = agent.alert_carrier ? CARRIER_GATEWAYS[agent.alert_carrier] : undefined
-    if (!gateway || !resend) {
-      result.detail.push(`text skipped: Twilio not configured${gateway ? '' : ' and no supported carrier on profile'}`)
-      return result
-    }
-    const { error } = await resend.emails.send({
-      from: FROM_EMAIL, to: `${digits(e164).slice(-10)}@${gateway}`, subject: '', text: sms,
-    })
-    if (error) throw new Error(error.message)
-    result.text = 'sent'
-    result.detail.push(`text sent via ${agent.alert_carrier} gateway`)
-  } catch (error) {
-    result.text = 'failed'
-    result.detail.push(`text failed: ${error instanceof Error ? error.message : String(error)}`)
+  if (!gateway) {
+    result.detail.push(`text skipped: carrier "${agent.alert_carrier ?? 'not set'}" has no email-to-text gateway`)
+    return result
   }
+  const { error } = await resend.emails.send({
+    from: FROM_EMAIL, to: `${phone}@${gateway}`, subject: 'New lead', text: renderAssignmentSms(lead, assignmentType),
+  })
+  if (error) { result.text = 'failed'; result.detail.push(`text failed: ${error.message}`) }
+  else result.text = 'sent'
   return result
 }
