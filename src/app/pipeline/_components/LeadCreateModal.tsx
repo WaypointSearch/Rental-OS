@@ -88,8 +88,8 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!form.id.trim()) {
-      setError('Lead ID is required (use phone number or thread ID)')
+    if (!form.name.trim() && !form.phone.trim()) {
+      setError('Enter at least a name or a phone number')
       return
     }
     setSaving(true)
@@ -179,13 +179,12 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
             gridTemplateColumns: '1fr 1fr',
             gap: '13px 16px',
           }}>
-            <Field label="Lead ID *" span2>
+            <Field label="Lead ID (optional, uses the phone number if blank)" span2>
               <input
                 style={inputStyle}
                 placeholder="Phone number or FB thread ID"
                 value={form.id}
                 onChange={e => set('id', e.target.value)}
-                required
               />
             </Field>
 

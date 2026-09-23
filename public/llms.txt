@@ -11,9 +11,17 @@
   Kanban board (switch with the "Kanban" / "List" buttons in the top bar).
 - /profile — the agent's profile: name, phone, license, MLS, showing areas,
   languages spoken, lead preference, alert preference, weekly availability.
-- /transactions — submit transaction documents ("Docs" in the phone menu).
-- /commission — request a commission payout ("Commission" in the phone menu).
+- /deals — "My Deals" ("Deals" in the phone menu): the agent's own rental and
+  sales clients, document submissions and commission requests with status, plus
+  links to add a self-generated lead, submit docs, or request a commission.
+- /transactions — submit transaction documents.
+- /commission — request a commission payout.
 - /sales — the sales workspace (switch with "Rentals" / "Sales" in the top bar).
+
+## Language
+The app can be shown in English or Spanish (EN / ES switch in the top bar and on
+/profile). Button and field names in this guide are the English ones; switch to
+EN before following them. Stored data (stages, notes) is always in English.
 
 ## Lead stages (in order)
 1. Waiting for contact

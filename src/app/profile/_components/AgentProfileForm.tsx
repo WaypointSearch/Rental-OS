@@ -6,12 +6,13 @@ import { ArrowLeft, Camera, UserRound } from 'lucide-react'
 import {
   AgentProfile,
   Availability,
-  DAY_LABELS,
   DAYS,
   DEFAULT_AVAILABILITY,
   DayKey,
 } from '@/types/agent'
 import { getSupabase } from '@/lib/supabase'
+import { LanguageToggle, useI18n } from '@/lib/i18n'
+import type { TranslationKey } from '@/lib/i18n/dictionary'
 import styles from '../profile.module.css'
 
 const CARRIERS = [
@@ -60,6 +61,7 @@ export function AgentProfileForm({
   userEmail: string
 }) {
   const supabase = useMemo(() => getSupabase(), [])
+  const { t } = useI18n()
   const fileRef = useRef<HTMLInputElement>(null)
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
   const [alertPhone, setAlertPhone] = useState(profile?.alert_phone ?? '')
@@ -92,9 +94,9 @@ export function AgentProfileForm({
       const permanentUrl = data.publicUrl
       await supabase.from('agent_profiles').update({ avatar_url: permanentUrl }).eq('id', userId)
       setAvatarUrl(`${permanentUrl}?t=${Date.now()}`)
-      setNotice({ kind: 'success', text: 'Profile photo updated.' })
+      setNotice({ kind: 'success', text: t('profile.photoUpdated') })
     } catch (caught) {
-      setNotice({ kind: 'error', text: caught instanceof Error ? caught.message : 'Could not upload photo.' })
+      setNotice({ kind: 'error', text: caught instanceof Error ? caught.message : t('profile.photoFailed') })
     } finally {
       setUploading(false)
     }
@@ -133,15 +135,15 @@ export function AgentProfileForm({
     event.preventDefault()
     setNotice(null)
     if (!fullName.trim()) {
-      setNotice({ kind: 'error', text: 'Enter your full name.' })
+      setNotice({ kind: 'error', text: t('profile.errName') })
       return
     }
     if (!licenseNumber.trim()) {
-      setNotice({ kind: 'error', text: 'Florida license number is required.' })
+      setNotice({ kind: 'error', text: t('profile.errLicense') })
       return
     }
     if (alertPreference !== 'email' && !alertPhone.trim()) {
-      setNotice({ kind: 'error', text: 'Enter a phone number to receive text alerts.' })
+      setNotice({ kind: 'error', text: t('profile.errPhone') })
       return
     }
 
@@ -175,8 +177,8 @@ export function AgentProfileForm({
     }
 
     if (result.error) setNotice({ kind: 'error', text: result.error.message })
-    else if (languagesSkipped) setNotice({ kind: 'error', text: 'Profile saved, but languages could not be stored yet. Ask the broker to run the languages database update.' })
-    else setNotice({ kind: 'success', text: 'Profile saved. Broker routing now uses these preferences.' })
+    else if (languagesSkipped) setNotice({ kind: 'error', text: t('profile.savedNoLanguages') })
+    else setNotice({ kind: 'success', text: t('profile.saved') })
     setSaving(false)
   }
 
@@ -185,8 +187,8 @@ export function AgentProfileForm({
   return (
     <main className={styles.page}>
       <nav className={styles.nav}>
-        <strong><span className={styles.mark}><UserRound size={15}/></span> My Profile</strong>
-        <Link href="/pipeline"><ArrowLeft size={13}/> Back to Pipeline</Link>
+        <strong><span className={styles.mark}><UserRound size={15}/></span> {t('profile.title')}</strong>
+        <Link href="/pipeline"><ArrowLeft size={13}/> {t('nav.backToPipeline')}</Link>
       </nav>
 
       <section className={styles.shell}>
@@ -199,38 +201,43 @@ export function AgentProfileForm({
             <h1>{displayName}</h1>
             <p>{userEmail}</p>
             <button type="button" className={styles.upload} onClick={() => fileRef.current?.click()} disabled={uploading}>
-              <Camera size={12}/> {uploading ? 'Uploading…' : 'Upload Photo'}
+              <Camera size={12}/> {uploading ? t('lead.uploading') : t('profile.upload')}
             </button>
           </div>
         </div>
 
         <form className={styles.form} onSubmit={save}>
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Profile Info</strong><span>Used by the broker when assigning and routing rental leads.</span></div>
+            <div className={styles.cardHead}><strong>{t('profile.info')}</strong><span>{t('profile.infoHint')}</span></div>
             <div className={styles.grid2}>
-              <div className={styles.field}><label>Full Name <span className={styles.required}>required</span></label><input value={fullName} onChange={event => setFullName(event.target.value)}/></div>
-              <div className={`${styles.field} ${styles.readonly}`}><label>Email</label><input value={userEmail} readOnly/></div>
-              <div className={styles.field}><label>Phone Number <span className={styles.hint}>for SMS lead alerts</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
-              <div className={styles.field}><label>Florida License Number <span className={styles.required}>required</span></label><input value={licenseNumber} onChange={event => setLicenseNumber(event.target.value)} placeholder="SL1234567"/></div>
+              <div className={styles.field}><label>{t('profile.fullName')} <span className={styles.required}>{t('profile.required')}</span></label><input value={fullName} onChange={event => setFullName(event.target.value)}/></div>
+              <div className={`${styles.field} ${styles.readonly}`}><label>{t('profile.email')}</label><input value={userEmail} readOnly/></div>
+              <div className={styles.field}><label>{t('profile.phone')} <span className={styles.hint}>{t('profile.phoneHint')}</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
+              <div className={styles.field}><label>{t('profile.license')} <span className={styles.required}>{t('profile.required')}</span></label><input value={licenseNumber} onChange={event => setLicenseNumber(event.target.value)} placeholder="SL1234567"/></div>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>MLS Affiliation</strong><span>Select the MLS association you currently belong to.</span></div>
+            <div className={styles.cardHead}><strong>{t('profile.mls')}</strong><span>{t('profile.mlsHint')}</span></div>
             <div className={styles.choices}>
-              <button type="button" className={`${styles.choice} ${mlsAffiliation === 'miami_mls' ? styles.activeBlue : ''}`} onClick={() => setMlsAffiliation('miami_mls')}><strong>Miami MLS</strong><small>Miami-Dade access</small></button>
+              <button type="button" className={`${styles.choice} ${mlsAffiliation === 'miami_mls' ? styles.activeBlue : ''}`} onClick={() => setMlsAffiliation('miami_mls')}><strong>Miami MLS</strong><small>{t('profile.miamiHint')}</small></button>
               <button type="button" className={`${styles.choice} ${mlsAffiliation === 'beaches_mls' ? styles.activeGreen : ''}`} onClick={() => setMlsAffiliation('beaches_mls')}><strong>Beaches MLS</strong><small>Broward / Palm Beach</small></button>
-              <button type="button" className={`${styles.choice} ${mlsAffiliation === 'no_mls' ? styles.activeGold : ''}`} onClick={() => setMlsAffiliation('no_mls')}><strong>No MLS</strong><small>Showing-only eligible</small></button>
+              <button type="button" className={`${styles.choice} ${mlsAffiliation === 'no_mls' ? styles.activeGold : ''}`} onClick={() => setMlsAffiliation('no_mls')}><strong>{t('profile.noMls')}</strong><small>{t('profile.noMlsHint')}</small></button>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Showing Areas</strong><span>Tell the broker where you are willing to show properties. This feeds the assignment match.</span></div>
-            <div className={styles.field}><textarea value={showingAreas} onChange={event => setShowingAreas(event.target.value)} placeholder="e.g. Hollywood, Fort Lauderdale, Pembroke Pines, all East Broward, Boca Raton…"/></div>
+            <div className={styles.cardHead}><strong>{t('profile.areas')}</strong><span>{t('profile.areasHint')}</span></div>
+            <div className={styles.field}><textarea value={showingAreas} onChange={event => setShowingAreas(event.target.value)} placeholder={t('profile.areasPlaceholder')}/></div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Languages Spoken</strong><span>Select every language you can work with clients in. The broker uses this to match leads.</span></div>
+            <div className={styles.cardHead}><strong>{t('lang.label')}</strong><span>{t('profile.languageHint')}</span></div>
+            <LanguageToggle />
+          </section>
+
+          <section className={styles.card}>
+            <div className={styles.cardHead}><strong>{t('profile.languages')}</strong><span>{t('profile.languagesHint')}</span></div>
             <div className={styles.languages}>
               {[...COMMON_LANGUAGES, ...languages.filter(item => !COMMON_LANGUAGES.some(common => common.toLowerCase() === item.toLowerCase()))].map(language => {
                 const active = languages.some(item => item.toLowerCase() === language.toLowerCase())
@@ -242,28 +249,28 @@ export function AgentProfileForm({
                 value={languageDraft}
                 onChange={event => setLanguageDraft(event.target.value)}
                 onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addLanguage() } }}
-                placeholder="Add another language, e.g. Polish"
-                aria-label="Add another language"
+                placeholder={t('profile.addLanguage')}
+                aria-label={t('profile.addLanguage')}
               />
-              <button type="button" onClick={addLanguage} disabled={!languageDraft.trim()}>Add</button>
+              <button type="button" onClick={addLanguage} disabled={!languageDraft.trim()}>{t('profile.add')}</button>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Lead Preference</strong><span>What type of rental work do you want the broker to route to you?</span></div>
+            <div className={styles.cardHead}><strong>{t('profile.leadPref')}</strong><span>{t('profile.leadPrefHint')}</span></div>
             <div className={styles.choices}>
-              <button type="button" className={`${styles.choice} ${leadPreference === 'showing_only' ? styles.activeGold : ''}`} onClick={() => setLeadPreference('showing_only')}><strong>Showing Only</strong><small>$250/showing</small></button>
-              <button type="button" className={`${styles.choice} ${leadPreference === 'full_service' ? styles.activeBlue : ''}`} onClick={() => setLeadPreference('full_service')}><strong>Full Leads</strong><small>60% commission</small></button>
-              <button type="button" className={`${styles.choice} ${leadPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setLeadPreference('both')}><strong>Both</strong><small>All eligible leads</small></button>
+              <button type="button" className={`${styles.choice} ${leadPreference === 'showing_only' ? styles.activeGold : ''}`} onClick={() => setLeadPreference('showing_only')}><strong>{t('type.showing')}</strong><small>{t('profile.showingPay')}</small></button>
+              <button type="button" className={`${styles.choice} ${leadPreference === 'full_service' ? styles.activeBlue : ''}`} onClick={() => setLeadPreference('full_service')}><strong>{t('profile.fullLeads')}</strong><small>{t('type.fullPay')}</small></button>
+              <button type="button" className={`${styles.choice} ${leadPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setLeadPreference('both')}><strong>{t('profile.both')}</strong><small>{t('profile.allEligible')}</small></button>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Lead Alert Preference</strong><span>Choose how you want to receive new assignment notifications.</span></div>
+            <div className={styles.cardHead}><strong>{t('profile.alerts')}</strong><span>{t('profile.alertsHint')}</span></div>
             <div className={styles.choices}>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'email' ? styles.activeBlue : ''}`} onClick={() => setAlertPreference('email')}><strong>Email Only</strong><small>Inbox alert</small></button>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'text' ? styles.activeGold : ''}`} onClick={() => setAlertPreference('text')}><strong>Text Only</strong><small>Carrier SMS alert</small></button>
-              <button type="button" className={`${styles.choice} ${alertPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setAlertPreference('both')}><strong>Both</strong><small>Email + text</small></button>
+              <button type="button" className={`${styles.choice} ${alertPreference === 'email' ? styles.activeBlue : ''}`} onClick={() => setAlertPreference('email')}><strong>{t('profile.emailOnly')}</strong><small>{t('profile.emailOnlyHint')}</small></button>
+              <button type="button" className={`${styles.choice} ${alertPreference === 'text' ? styles.activeGold : ''}`} onClick={() => setAlertPreference('text')}><strong>{t('profile.textOnly')}</strong><small>{t('profile.textOnlyHint')}</small></button>
+              <button type="button" className={`${styles.choice} ${alertPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setAlertPreference('both')}><strong>{t('profile.both')}</strong><small>{t('profile.bothEmailText')}</small></button>
             </div>
             {alertPreference !== 'email' && (
               <div className={styles.carriers}>
@@ -273,14 +280,14 @@ export function AgentProfileForm({
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardHead}><strong>Weekly Availability</strong><span>Turn on the days and times you can accept showings. The broker sees this when assigning leads.</span></div>
+            <div className={styles.cardHead}><strong>{t('profile.availability')}</strong><span>{t('profile.availabilityHint')}</span></div>
             <div className={styles.availability}>
               {DAYS.map(day => {
                 const slot = availability[day]
                 return (
                   <div key={day} className={`${styles.day} ${slot.active ? styles.on : ''}`}>
-                    <button type="button" className={styles.toggle} onClick={() => toggleDay(day)}><span className={styles.dot}/>{DAY_LABELS[day]}</button>
-                    {slot.active ? <div className={styles.times}><input type="time" value={slot.start} onChange={event => setTime(day, 'start', event.target.value)}/><span>to</span><input type="time" value={slot.end} onChange={event => setTime(day, 'end', event.target.value)}/></div> : <div className={styles.offText}>Off</div>}
+                    <button type="button" className={styles.toggle} onClick={() => toggleDay(day)}><span className={styles.dot}/>{t(`day.${day}` as TranslationKey)}</button>
+                    {slot.active ? <div className={styles.times}><input type="time" value={slot.start} onChange={event => setTime(day, 'start', event.target.value)}/><span>{t('profile.to')}</span><input type="time" value={slot.end} onChange={event => setTime(day, 'end', event.target.value)}/></div> : <div className={styles.offText}>{t('profile.off')}</div>}
                   </div>
                 )
               })}
@@ -288,7 +295,7 @@ export function AgentProfileForm({
           </section>
 
           {notice && <div className={`${styles.message} ${notice.kind === 'success' ? styles.success : styles.error}`}>{notice.text}</div>}
-          <button className={styles.save} disabled={saving}>{saving ? 'Saving Profile…' : 'Save Profile'}</button>
+          <button className={styles.save} disabled={saving}>{saving ? t('profile.saving') : t('profile.save')}</button>
         </form>
       </section>
     </main>

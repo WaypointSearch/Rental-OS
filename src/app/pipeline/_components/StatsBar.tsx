@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { ASSIGNMENT_TYPES, Lead } from '@/types/lead'
 import styles from './board.module.css'
+import { useI18n } from '@/lib/i18n'
 
 interface StatsBarProps {
   leads: Lead[]
@@ -35,6 +36,7 @@ function StatCard({
 }
 
 export function StatsBar({ leads, isAdmin = false }: StatsBarProps) {
+  const { t } = useI18n()
   const total = leads.length
 
   const newToday = leads.filter((l) => {
@@ -76,22 +78,22 @@ export function StatsBar({ leads, isAdmin = false }: StatsBarProps) {
 
   return (
     <div className={styles.stats} role="group" aria-label="Pipeline summary">
-      <StatCard label="Total leads"  value={total}     icon={Layers} />
-      <StatCard label="New today"    value={newToday}  icon={CalendarPlus} tone="#3fb950" highlight={newToday > 0} />
-      <StatCard label="Active"       value={active}    icon={Flame}        tone="#58a6ff" highlight />
-      <StatCard label="Stale 10d+"   value={stale}     icon={AlarmClock}   tone="#f85149" highlight={stale > 0} />
-      <StatCard label="Closing"      value={highValue} icon={Inbox}        tone="#f0883e" highlight={highValue > 0} />
-      <StatCard label="Closed this month" value={closedMo} icon={CheckCircle2} tone="#3fb950" highlight={closedMo > 0} />
+      <StatCard label={t('stats.total')}  value={total}     icon={Layers} />
+      <StatCard label={t('stats.newToday')}    value={newToday}  icon={CalendarPlus} tone="#3fb950" highlight={newToday > 0} />
+      <StatCard label={t('stats.active')}       value={active}    icon={Flame}        tone="#58a6ff" highlight />
+      <StatCard label={t('stats.stale')}   value={stale}     icon={AlarmClock}   tone="#f85149" highlight={stale > 0} />
+      <StatCard label={t('stats.closing')}      value={highValue} icon={Inbox}        tone="#f0883e" highlight={highValue > 0} />
+      <StatCard label={t('stats.closedMonth')} value={closedMo} icon={CheckCircle2} tone="#3fb950" highlight={closedMo > 0} />
 
       {isAdmin && unassigned > 0 && (
-        <StatCard label="Unassigned" value={unassigned} icon={UserX} tone="#e3b341" highlight />
+        <StatCard label={t('stats.unassigned')} value={unassigned} icon={UserX} tone="#e3b341" highlight />
       )}
 
       {isAdmin && (
         <>
           <span className={styles.divider} aria-hidden="true" />
-          <StatCard label={ASSIGNMENT_TYPES.full.label + 's'} value={full} icon={Handshake} tone={ASSIGNMENT_TYPES.full.color} highlight={full > 0} />
-          <StatCard label="Showing only" value={showing} icon={Eye} tone={ASSIGNMENT_TYPES.showing.color} highlight={showing > 0} />
+          <StatCard label={t('stats.full')} value={full} icon={Handshake} tone={ASSIGNMENT_TYPES.full.color} highlight={full > 0} />
+          <StatCard label={t('stats.showing')} value={showing} icon={Eye} tone={ASSIGNMENT_TYPES.showing.color} highlight={showing > 0} />
           <span className={styles.divider} aria-hidden="true" />
           <StatCard label="Facebook" value={fb} icon={Inbox} tone="#1877f2" />
           <StatCard label="Google Voice" value={gv} icon={Inbox} tone="#34a853" />
