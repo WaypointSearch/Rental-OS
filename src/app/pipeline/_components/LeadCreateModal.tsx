@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Lead, STAGES } from '@/types/lead'
+import { useI18n } from '@/lib/i18n'
 
 interface LeadCreateModalProps {
   onClose: () => void
@@ -29,7 +30,7 @@ const inputStyle: React.CSSProperties = {
   color: C.text,
   borderRadius: 8,
   padding: '9px 12px',
-  fontSize: 13,
+  fontSize: 16, // 16px stops iOS from zooming into the field
   outline: 'none',
   fontFamily: 'inherit',
   boxSizing: 'border-box',
@@ -49,7 +50,7 @@ function Field({ label, children, span2 }: {
   label: string; children: React.ReactNode; span2?: boolean
 }) {
   return (
-    <div style={{ gridColumn: span2 ? 'span 2' : 'span 1' }}>
+    <div style={{ gridColumn: span2 ? '1 / -1' : 'auto' }}>
       <label style={labelStyle}>{label}</label>
       {children}
     </div>
@@ -58,6 +59,7 @@ function Field({ label, children, span2 }: {
 
 export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateModalProps) {
   const [saving, setSaving] = useState(false)
+  const { t, stage: stageName } = useI18n()
   const [error,  setError]  = useState<string | null>(null)
 
   const [form, setForm] = useState({
@@ -89,7 +91,7 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
     e.preventDefault()
     setError(null)
     if (!form.name.trim() && !form.phone.trim()) {
-      setError('Enter at least a name or a phone number')
+      setError(t('new.errNameOrPhone'))
       return
     }
     setSaving(true)
@@ -151,14 +153,16 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
         }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, color: C.text, letterSpacing: '-0.3px' }}>
-              New Lead
+              {t('nav.newLead')}
             </div>
             <div style={{ fontSize: 12, color: C.dim, marginTop: 2 }}>
-              Manually add a lead to the pipeline
+              {t('new.sub')}
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label={t('lead.cancel')}
             style={{
               background: 'rgba(255,255,255,0.06)',
               border: `1px solid rgba(255,255,255,0.1)`,
@@ -176,99 +180,99 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
         >
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
             gap: '13px 16px',
           }}>
-            <Field label="Lead ID (optional, uses the phone number if blank)" span2>
+            <Field label={t('new.id')} span2>
               <input
                 style={inputStyle}
-                placeholder="Phone number or FB thread ID"
+                placeholder={t('new.idPlaceholder')}
                 value={form.id}
                 onChange={e => set('id', e.target.value)}
               />
             </Field>
 
-            <Field label="Full Name">
+            <Field label={t('new.name')}>
               <input style={inputStyle}
                 value={form.name} onChange={e => set('name', e.target.value)} />
             </Field>
 
-            <Field label="Phone">
+            <Field label={t('new.phone')}>
               <input style={inputStyle}
                 value={form.phone} onChange={e => set('phone', e.target.value)} />
             </Field>
 
-            <Field label="Source">
+            <Field label={t('new.source')}>
               <select style={{ ...inputStyle, cursor: 'pointer' }}
                 value={form.source} onChange={e => set('source', e.target.value)}>
                 <option value="Manual">Manual</option>
                 <option value="Facebook Marketplace">Facebook Marketplace</option>
                 <option value="Google Voice">Google Voice</option>
-                <option value="Referral">Referral</option>
-                <option value="Other">Other</option>
+                <option value="Referral">{t('new.referral')}</option>
+                <option value="Other">{t('new.other')}</option>
               </select>
             </Field>
 
-            <Field label="Bedrooms">
+            <Field label={t('lead.bedrooms')}>
               <input style={inputStyle}
                 value={form.bedrooms} onChange={e => set('bedrooms', e.target.value)} />
             </Field>
 
-            <Field label="Bathrooms">
+            <Field label={t('lead.bathrooms')}>
               <input style={inputStyle}
                 value={form.bathrooms} onChange={e => set('bathrooms', e.target.value)} />
             </Field>
 
-            <Field label="Budget">
+            <Field label={t('new.budget')}>
               <input style={inputStyle}
                 value={form.budget} onChange={e => set('budget', e.target.value)} />
             </Field>
 
-            <Field label="Move-in Date">
+            <Field label={t('lead.moveIn')}>
               <input style={inputStyle}
                 value={form.move_in} onChange={e => set('move_in', e.target.value)} />
             </Field>
 
-            <Field label="Pets">
+            <Field label={t('lead.pets')}>
               <input style={inputStyle}
                 value={form.pets} onChange={e => set('pets', e.target.value)} />
             </Field>
 
-            <Field label="Credit">
+            <Field label={t('lead.credit')}>
               <input style={inputStyle}
                 value={form.credit} onChange={e => set('credit', e.target.value)} />
             </Field>
 
-            <Field label="Monthly Income">
+            <Field label={t('new.income')}>
               <input style={inputStyle}
                 value={form.income} onChange={e => set('income', e.target.value)} />
             </Field>
 
-            <Field label="MLS Codes (comma-separated)" span2>
+            <Field label={t('new.mls')} span2>
               <input style={inputStyle}
                 value={form.mls_codes} onChange={e => set('mls_codes', e.target.value)} />
             </Field>
 
-            <Field label="Listing URLs (comma-separated)" span2>
+            <Field label={t('new.urls')} span2>
               <input style={inputStyle}
                 value={form.urls} onChange={e => set('urls', e.target.value)} />
             </Field>
 
-            <Field label="Craigslist URL" span2>
+            <Field label={t('new.craigslist')} span2>
               <input style={inputStyle}
                 value={form.cl_url} onChange={e => set('cl_url', e.target.value)} />
             </Field>
 
-            <Field label="Cosigner Info">
+            <Field label={t('new.cosigner')}>
               <input style={inputStyle}
                 value={form.cosigner_info} onChange={e => set('cosigner_info', e.target.value)} />
             </Field>
 
-            <Field label="Initial Stage">
+            <Field label={t('new.stage')}>
               <select style={{ ...inputStyle, cursor: 'pointer' }}
                 value={form.stage} onChange={e => set('stage', e.target.value)}>
                 {STAGES.map(s => (
-                  <option key={s} value={s} style={{ background: '#161b22' }}>{s}</option>
+                  <option key={s} value={s} style={{ background: '#161b22' }}>{stageName(s)}</option>
                 ))}
               </select>
             </Field>
@@ -293,7 +297,7 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
               padding: '9px 20px', fontSize: 13,
               cursor: 'pointer', fontFamily: 'inherit',
             }}>
-              Cancel
+              {t('lead.cancel')}
             </button>
             <button type="submit" disabled={saving} style={{
               background: saving ? 'rgba(56,139,253,0.3)' : 'linear-gradient(135deg, #0550ae, #388bfd)',
@@ -303,7 +307,7 @@ export function LeadCreateModal({ onClose, onCreated, agentEmail }: LeadCreateMo
               fontFamily: 'inherit',
               boxShadow: saving ? 'none' : '0 2px 10px rgba(56,139,253,0.3)',
             }}>
-              {saving ? 'Creating…' : 'Create Lead'}
+              {saving ? t('new.creating') : t('new.create')}
             </button>
           </div>
         </form>

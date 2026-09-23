@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, CheckCircle2, KeyRound, ShieldCheck, Waves } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
+import { useI18n } from '@/lib/i18n'
 
 export default function SetPasswordPage() {
   const router = useRouter()
   const supabase = getSupabase()
+  const { t } = useI18n()
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -28,12 +30,12 @@ export default function SetPasswordPage() {
     setError(null)
 
     if (password.length < 8) {
-      setError('Use at least 8 characters for your password.')
+      setError(t('pw.errLength'))
       return
     }
 
     if (password !== confirmPassword) {
-      setError('The passwords do not match.')
+      setError(t('pw.errMatch'))
       return
     }
 
@@ -53,7 +55,7 @@ export default function SetPasswordPage() {
     return (
       <main className="ros-login" style={{ gridTemplateColumns: '1fr' }}>
         <section className="ros-login-side" style={{ border: 0 }}>
-          <div style={{ color: '#8da0b7', fontSize: 12 }}>Securing your invitation…</div>
+          <div style={{ color: '#8da0b7', fontSize: 12 }}>{t('pw.securing')}</div>
         </section>
       </main>
     )
@@ -71,16 +73,16 @@ export default function SetPasswordPage() {
         </div>
 
         <div className="ros-login-message">
-          <div className="ros-login-kicker">Agent activation</div>
-          <h1>Welcome to<br/>the team.</h1>
-          <p>Create your private password once. After activation, you can sign in with your password or request a secure magic link whenever you prefer.</p>
+          <div className="ros-login-kicker">{t('pw.kicker')}</div>
+          <h1>{t('pw.h1a')}<br/>{t('pw.h1b')}</h1>
+          <p>{t('pw.pitch')}</p>
           <div className="ros-login-proof">
-            <span className="ros-proof-pill"><ShieldCheck size={13}/> Private agent access</span>
-            <span className="ros-proof-pill"><KeyRound size={13}/> Your own password</span>
+            <span className="ros-proof-pill"><ShieldCheck size={13}/> {t('pw.p1')}</span>
+            <span className="ros-proof-pill"><KeyRound size={13}/> {t('pw.p2')}</span>
           </div>
         </div>
 
-        <div className="ros-login-footer">Your invitation link is one-time access. Keep your password private.</div>
+        <div className="ros-login-footer">{t('pw.footer')}</div>
       </section>
 
       <section className="ros-login-side">
@@ -88,20 +90,20 @@ export default function SetPasswordPage() {
           {done ? (
             <div className="ros-auth-success">
               <div className="ros-auth-success-icon"><CheckCircle2 size={25}/></div>
-              <h3>You&apos;re activated</h3>
-              <p>Your password is set. Your Rental OS workspace is ready.</p>
+              <h3>{t('pw.done')}</h3>
+              <p>{t('pw.doneHint')}</p>
               <button className="ros-auth-submit" style={{ marginTop: 20 }} onClick={() => router.replace('/pipeline')}>
-                Open Rental OS <ArrowRight size={14}/>
+                {t('pw.open')} <ArrowRight size={14}/>
               </button>
             </div>
           ) : (
             <>
-              <h2>Create your password</h2>
-              <p>Choose the password you&apos;ll use for regular agent login.</p>
+              <h2>{t('pw.title')}</h2>
+              <p>{t('pw.sub')}</p>
 
               <form onSubmit={submit}>
                 <div className="ros-field">
-                  <label>New password</label>
+                  <label>{t('pw.new')}</label>
                   <div className="ros-field-wrap">
                     <KeyRound className="ros-field-icon" size={15}/>
                     <input
@@ -112,13 +114,13 @@ export default function SetPasswordPage() {
                       autoComplete="new-password"
                       required
                       minLength={8}
-                      placeholder="At least 8 characters"
+                      placeholder={t('pw.newPh')}
                     />
                   </div>
                 </div>
 
                 <div className="ros-field">
-                  <label>Confirm password</label>
+                  <label>{t('pw.confirm')}</label>
                   <div className="ros-field-wrap">
                     <KeyRound className="ros-field-icon" size={15}/>
                     <input
@@ -129,7 +131,7 @@ export default function SetPasswordPage() {
                       autoComplete="new-password"
                       required
                       minLength={8}
-                      placeholder="Type it again"
+                      placeholder={t('pw.confirmPh')}
                     />
                   </div>
                 </div>
@@ -137,7 +139,7 @@ export default function SetPasswordPage() {
                 {error && <div className="ros-auth-error">{error}</div>}
 
                 <button className="ros-auth-submit" type="submit" disabled={loading}>
-                  {loading ? 'Saving…' : <>Set password <ArrowRight size={14}/></>}
+                  {loading ? t('lead.saving') : <>{t('pw.set')} <ArrowRight size={14}/></>}
                 </button>
               </form>
             </>
