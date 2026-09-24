@@ -550,6 +550,7 @@ function BoardInner({
           onClose={() => setShowCreate(false)}
           onCreated={handleLeadCreated}
           agentEmail={agentEmail}
+          isAdmin={isAdmin}
         />
       )}
 

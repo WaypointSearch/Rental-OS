@@ -81,5 +81,22 @@ Base URL: this site. Every request needs `Authorization: Bearer <AI agent key>`
 
 Assignment types: "full" = agent works the lead start to finish (60% commission);
 "showing" = agent only shows the property ($250 per closed showing). Match the
-type to the agent's lead_preference. Every assignment automatically emails and
-texts the agent; the response's `notified` field says what was sent.
+type to the agent's lead_preference. Every assignment automatically emails the
+agent a summary (the response's `notified` field says whether it went out).
+The CRM does not text agents: text them yourself from your own phone system,
+using the `phone` returned by GET /api/agent/agents.
+
+## Working as the broker in the app (no API)
+Signed in as the broker, on /pipeline (desktop):
+1. Press "New Lead".
+2. "Lead source": press "Google Voice" or "Facebook Marketplace" (or Referral / Other).
+3. Fill "Lead ID" (phone number, or the Facebook thread ID if there is no phone),
+   "Full Name", "Phone", "Area / cities", "Bedrooms", "Bathrooms", "Budget",
+   "Move-in Date", "Pets", "Credit", "Monthly Income", and "Summary (conversation
+   notes)" with what the tenant told you.
+4. "Assign to agent": pick the agent, then under "Assignment type" press
+   "Full lead" or "Showing only". Leave it on "Leave unassigned for now" to
+   decide later.
+5. Press "Create & assign" (or "Create Lead"). The agent is emailed automatically.
+To reassign an existing lead or change its type, open the lead and press
+"Reassign or change type", pick the type, then press "Assign" next to the agent.

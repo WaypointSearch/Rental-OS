@@ -4,8 +4,9 @@ import { requireAgentKey } from '@/lib/agentApi'
 
 /**
  * GET /api/agent/agents
- * Everything an AI dispatcher needs to pick an agent: coverage, languages,
- * lead preference, MLS and weekly availability. No tax, ID or admin fields.
+ * Everything an AI dispatcher needs to pick and contact an agent: mobile
+ * number, coverage, languages, lead preference, MLS and weekly availability.
+ * No tax, ID or admin fields.
  */
 export async function GET(req: NextRequest) {
   const denied = await requireAgentKey(req)
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   const agents = (data ?? []).map(agent => ({
     email: agent.email,
     name: agent.full_name,
+    phone: agent.alert_phone ?? null,
     showing_areas: agent.showing_areas ?? null,
     languages: agent.languages ?? [],
     lead_preference: agent.lead_preference ?? 'both',

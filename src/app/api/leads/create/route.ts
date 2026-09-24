@@ -38,11 +38,17 @@ export async function POST(req: NextRequest) {
     delete record.assignment_type
   }
 
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from('leads')
     .upsert(record, { onConflict: 'id' })
     .select()
     .single()
+
+  // Databases without supabase-lead-assignment-type.sql: save the lead without the type
+  if (error && /assignment_type/i.test(error.message) && 'assignment_type' in record) {
+    delete record.assignment_type
+    ;({ data, error } = await admin.from('leads').upsert(record, { onConflict: 'id' }).select().single())
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ lead: data })

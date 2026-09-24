@@ -3,35 +3,23 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ASSIGNMENT_TYPES, AssignmentType, Lead } from '@/types/lead'
 
 /**
- * Tells an agent they have a new lead: a branded email, plus a short email sent
- * to their carrier's email-to-text gateway (the carrier chosen on their profile)
- * so it lands on their phone as a text. Used by both the broker's Assign screen
- * (/api/send-assignment) and the AI dispatch API (/api/agent/*).
+ * Emails an agent a branded summary when a lead is assigned to them. Used by the
+ * broker's Assign screen / New Lead form (/api/send-assignment) and the AI
+ * dispatch API (/api/agent/*). Text messages are sent by the broker's AI agent
+ * from its own phone system, so none are sent from here.
  *
- * Env: RESEND_API_KEY (required to send anything), NEXT_PUBLIC_SITE_URL (links).
+ * Env: RESEND_API_KEY (required), NEXT_PUBLIC_SITE_URL (links back to the CRM).
  */
 
 const FROM_EMAIL = process.env.ASSIGNMENT_FROM_EMAIL ?? 'Sun Ocean Realty <noreply@rentalosnoreply.com>'
 
-// Carrier email-to-text gateways (keys match the carriers on the profile page).
-// AT&T shut its gateway down in 2025, so AT&T agents get the email only.
-const CARRIER_GATEWAYS: Record<string, string> = {
-  verizon: 'vtext.com',
-  tmobile: 'tmomail.net',
-  sprint: 'messaging.sprintpcs.com',
-  googlefi: 'msg.fi.google.com',
-  metropcs: 'mymetropcs.com',
-  cricket: 'sms.cricketwireless.net',
-}
-
 export type ChannelResult = 'sent' | 'skipped' | 'failed'
-export interface NotifyResult { email: ChannelResult; text: ChannelResult; detail: string[] }
+export interface NotifyResult { email: ChannelResult; detail: string[] }
 
 interface AgentContact {
   email: string
   full_name: string | null
   alert_phone: string | null
-  alert_carrier?: string | null
 }
 
 function esc(value: unknown) {
@@ -42,13 +30,6 @@ function esc(value: unknown) {
 
 function digits(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '')
-}
-
-function toE164(phone: string | null | undefined) {
-  const d = digits(phone)
-  if (d.length === 10) return `+1${d}`
-  if (d.length === 11 && d.startsWith('1')) return `+${d}`
-  return null
 }
 
 function firstName(agent: AgentContact) {
@@ -156,18 +137,6 @@ export function renderAssignmentEmail(lead: Lead, agent: AgentContact, type: Ass
   return { subject, html, text }
 }
 
-export function renderAssignmentSms(lead: Lead, type: AssignmentType | null) {
-  const info = type ? ASSIGNMENT_TYPES[type] : null
-  const facts = [
-    lead.phone,
-    [lead.bedrooms && `${lead.bedrooms}bd`, lead.bathrooms && `${lead.bathrooms}ba`].filter(Boolean).join('/'),
-    lead.budget,
-    lead.area,
-    lead.move_in && `move-in ${lead.move_in}`,
-  ].filter(Boolean).join(' · ')
-  return `Sun Ocean Realty: ${info ? `${info.label} (${info.pay})` : 'New lead'} assigned to you. ${lead.name ?? 'New tenant'} · ${facts}. Open: ${siteUrl()}/pipeline`
-}
-
 export async function notifyAgentOfAssignment({
   supabase, lead, agentEmail, assignmentType, assignedBy,
 }: {
@@ -177,11 +146,11 @@ export async function notifyAgentOfAssignment({
   assignmentType: AssignmentType | null
   assignedBy: string
 }): Promise<NotifyResult> {
-  const result: NotifyResult = { email: 'skipped', text: 'skipped', detail: [] }
+  const result: NotifyResult = { email: 'skipped', detail: [] }
 
   const { data: profile } = await supabase
     .from('agent_profiles')
-    .select('email, full_name, alert_phone, alert_carrier')
+    .select('email, full_name, alert_phone')
     .eq('email', agentEmail)
     .maybeSingle()
   const agent: AgentContact = profile ?? { email: agentEmail, full_name: null, alert_phone: null }
@@ -199,22 +168,5 @@ export async function notifyAgentOfAssignment({
     else result.email = 'sent'
   }
 
-  // ── Text (email to the carrier's email-to-text gateway) ──
-  const phone = digits(toE164(agent.alert_phone)).slice(-10)
-  const gateway = agent.alert_carrier ? CARRIER_GATEWAYS[agent.alert_carrier] : undefined
-  if (!resend) return result
-  if (phone.length !== 10) {
-    result.detail.push('text skipped: no valid phone number on the agent profile')
-    return result
-  }
-  if (!gateway) {
-    result.detail.push(`text skipped: carrier "${agent.alert_carrier ?? 'not set'}" has no email-to-text gateway`)
-    return result
-  }
-  const { error } = await resend.emails.send({
-    from: FROM_EMAIL, to: `${phone}@${gateway}`, subject: 'New lead', text: renderAssignmentSms(lead, assignmentType),
-  })
-  if (error) { result.text = 'failed'; result.detail.push(`text failed: ${error.message}`) }
-  else result.text = 'sent'
   return result
 }

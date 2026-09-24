@@ -183,9 +183,9 @@ Authorization: Bearer <your AI agent key>
           <Pill ok={status.email.configured}>{status.email.configured ? 'Email sending on' : 'RESEND_API_KEY missing'}</Pill>
         </div>
         <p style={{ margin: 0, fontSize: 13, color: '#8b949e', lineHeight: 1.6 }}>
-          Every assignment (yours or the AI’s) emails the agent a branded summary, and also sends a short
-          email to their phone carrier’s text gateway so it arrives as a text. Agents pick their carrier on
-          their Profile page. AT&amp;T no longer supports email-to-text, so AT&amp;T agents get email only.
+          Every assignment (from you, the New Lead form or the AI agent) automatically emails the agent a
+          branded summary of the lead. Texts are left to your AI agent: it gets each agent’s mobile number
+          from <code>GET /api/agent/agents</code> and texts them from its own phone system.
         </p>
       </section>
     </div>

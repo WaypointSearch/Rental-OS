@@ -15,19 +15,6 @@ import { LanguageToggle, useI18n } from '@/lib/i18n'
 import type { TranslationKey } from '@/lib/i18n/dictionary'
 import styles from '../profile.module.css'
 
-const CARRIERS = [
-  ['verizon', 'Verizon'],
-  ['tmobile', 'T-Mobile'],
-  ['att', 'AT&T'],
-  ['sprint', 'Sprint'],
-  ['googlefi', 'Google Fi'],
-  ['metropcs', 'Metro PCS'],
-  ['cricket', 'Cricket'],
-  ['other', 'Other / Unknown'],
-] as const
-
-// Carriers with an email-to-text gateway (see lib/notifyAssignment.ts)
-const CARRIER_HAS_GATEWAY = new Set<string>(['verizon', 'tmobile', 'sprint', 'googlefi', 'metropcs', 'cricket'])
 
 const COMMON_LANGUAGES = [
   'English', 'Spanish', 'Portuguese', 'Haitian Creole', 'French',
@@ -72,7 +59,6 @@ export function AgentProfileForm({
   const [showingAreas, setShowingAreas] = useState(profile?.showing_areas ?? '')
   const [leadPreference, setLeadPreference] = useState(profile?.lead_preference ?? 'both')
   const [mlsAffiliation, setMlsAffiliation] = useState(profile?.mls_affiliation ?? 'no_mls')
-  const [alertCarrier, setAlertCarrier] = useState<string>(profile?.alert_carrier ?? '')
   const [languages, setLanguages] = useState<string[]>(() => normalizedLanguages(profile?.languages))
   const [languageDraft, setLanguageDraft] = useState('')
   const [availability, setAvailability] = useState<Availability>(() => normalizedAvailability(profile?.availability))
@@ -144,7 +130,7 @@ export function AgentProfileForm({
       setNotice({ kind: 'error', text: t('profile.errLicense') })
       return
     }
-    if (alertCarrier && alertCarrier !== 'other' && !alertPhone.trim()) {
+    if (alertPhone.replace(/\D/g, '').length < 10) {
       setNotice({ kind: 'error', text: t('profile.errPhone') })
       return
     }
@@ -157,9 +143,8 @@ export function AgentProfileForm({
       showing_areas: showingAreas.trim() || null,
       lead_preference: leadPreference,
       mls_affiliation: mlsAffiliation,
-      // Every assignment is emailed; it's also texted when a carrier + phone are set
-      alert_preference: alertPhone.trim() && CARRIER_HAS_GATEWAY.has(alertCarrier) ? 'both' : 'email',
-      alert_carrier: alertCarrier || null,
+      // Assignments are emailed; the broker's AI texts agents from its own phone system
+      alert_preference: 'email' as const,
       availability,
       languages,
     }
@@ -215,7 +200,7 @@ export function AgentProfileForm({
             <div className={styles.grid2}>
               <div className={styles.field}><label>{t('profile.fullName')} <span className={styles.required}>{t('profile.required')}</span></label><input value={fullName} onChange={event => setFullName(event.target.value)}/></div>
               <div className={`${styles.field} ${styles.readonly}`}><label>{t('profile.email')}</label><input value={userEmail} readOnly/></div>
-              <div className={styles.field}><label>{t('profile.phone')} <span className={styles.hint}>{t('profile.phoneHint')}</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
+              <div className={styles.field}><label>{t('profile.phone')} <span className={styles.required}>{t('profile.required')}</span></label><input type="tel" value={alertPhone} onChange={event => setAlertPhone(event.target.value)} placeholder="9545551212"/></div>
               <div className={styles.field}><label>{t('profile.license')} <span className={styles.required}>{t('profile.required')}</span></label><input value={licenseNumber} onChange={event => setLicenseNumber(event.target.value)} placeholder="SL1234567"/></div>
             </div>
           </section>
@@ -266,14 +251,6 @@ export function AgentProfileForm({
               <button type="button" className={`${styles.choice} ${leadPreference === 'full_service' ? styles.activeBlue : ''}`} onClick={() => setLeadPreference('full_service')}><strong>{t('profile.fullLeads')}</strong><small>{t('type.fullPay')}</small></button>
               <button type="button" className={`${styles.choice} ${leadPreference === 'both' ? styles.activeGreen : ''}`} onClick={() => setLeadPreference('both')}><strong>{t('profile.both')}</strong><small>{t('profile.allEligible')}</small></button>
             </div>
-          </section>
-
-          <section className={styles.card}>
-            <div className={styles.cardHead}><strong>{t('profile.alerts')}</strong><span>{t('profile.alertsHint')}</span></div>
-            {alertCarrier === 'att' && <p className={styles.carrierNote}>{t('profile.attNote')}</p>}
-            <div className={styles.carriers}>
-                {CARRIERS.map(([value, label]) => <button type="button" key={value} className={`${styles.carrier} ${alertCarrier === value ? styles.active : ''}`} onClick={() => setAlertCarrier(value)}>{label}</button>)}
-              </div>
           </section>
 
           <section className={styles.card}>
