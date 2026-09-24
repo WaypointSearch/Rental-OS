@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Building2, CheckCircle2, FileText, Home, Loader2, UploadCloud } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
 import styles from './transactions.module.css'
+import { useI18n } from '@/lib/i18n'
 
 type DealType = 'rental' | 'sale'
 
@@ -26,6 +27,7 @@ function formatBytes(bytes: number) {
 
 export function TransactionForm({ userId, userEmail }: { userId: string; userEmail: string }) {
   const supabase = useMemo(() => getSupabase(), [])
+  const { t } = useI18n()
   const [type, setType] = useState<DealType | null>(null)
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
@@ -83,7 +85,7 @@ export function TransactionForm({ userId, userEmail }: { userId: string; userEma
       setZip('')
       setFiles([])
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not submit the transaction.')
+      setError(caught instanceof Error ? caught.message : t('tx.failed'))
     } finally {
       setBusy(false)
     }
@@ -94,24 +96,24 @@ export function TransactionForm({ userId, userEmail }: { userId: string; userEma
       <main className={styles.page}>
         <section className={styles.shell}>
           <header className={styles.header}>
-            <Link href="/pipeline" className={styles.back}><ArrowLeft size={16}/> Pipeline</Link>
+            <Link href="/deals" className={styles.back}><ArrowLeft size={16}/> {t('nav.myDeals')}</Link>
             <div>
-              <p className={styles.eyebrow}>Sun Ocean Realty · Agent Operations</p>
-              <h1>Submit Transaction Documents</h1>
-              <p className={styles.sub}>Choose the transaction type. Your name and email are attached automatically.</p>
+              <p className={styles.eyebrow}>{t('tx.eyebrow')}</p>
+              <h1>{t('tx.title')}</h1>
+              <p className={styles.sub}>{t('tx.chooseType')}</p>
             </div>
           </header>
 
           <div className={styles.typeGrid}>
             <button onClick={() => setType('rental')} className={styles.typeCard}>
               <span className={styles.typeIcon}><Home size={28}/></span>
-              <strong>Rental</strong>
-              <small>Lease, addenda, broker documents and final paperwork</small>
+              <strong>{t('deals.rental')}</strong>
+              <small>{t('tx.rentalHint')}</small>
             </button>
             <button onClick={() => setType('sale')} className={styles.typeCard}>
               <span className={styles.typeIcon}><Building2 size={28}/></span>
-              <strong>Sale</strong>
-              <small>Executed contract, disclosures, addenda and closing documents</small>
+              <strong>{t('deals.sale')}</strong>
+              <small>{t('tx.saleHint')}</small>
             </button>
           </div>
         </section>
@@ -123,40 +125,40 @@ export function TransactionForm({ userId, userEmail }: { userId: string; userEma
     <main className={styles.page}>
       <section className={styles.shell}>
         <header className={styles.header}>
-          <button className={styles.back} onClick={() => setType(null)}><ArrowLeft size={16}/> Change type</button>
+          <button className={styles.back} onClick={() => setType(null)}><ArrowLeft size={16}/> {t('tx.changeType')}</button>
           <div>
             <div className={styles.titleRow}>
-              <h1>Submit Transaction Documents</h1>
-              <span className={styles.badge}>{type}</span>
+              <h1>{t('tx.title')}</h1>
+              <span className={styles.badge}>{t(type === 'sale' ? 'deals.sale' : 'deals.rental')}</span>
             </div>
-            <p className={styles.sub}>This goes straight into the broker records center.</p>
+            <p className={styles.sub}>{t('tx.goesToBroker')}</p>
           </div>
         </header>
 
         {success && (
           <div className={styles.success}>
             <CheckCircle2 size={20}/>
-            <div><strong>Submitted successfully.</strong><span>The broker can now see this transaction in Records.</span></div>
+            <div><strong>{t('tx.success')}</strong><span>{t('tx.successHint')}</span></div>
           </div>
         )}
 
         <form onSubmit={submit} className={styles.form}>
           <section className={styles.card}>
-            <div className={styles.cardTitle}><FileText size={17}/> Property</div>
-            <label>Property address<input required value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St"/></label>
+            <div className={styles.cardTitle}><FileText size={17}/> {t('tx.property')}</div>
+            <label>{t('tx.address')}<input required value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St"/></label>
             <div className={styles.row3}>
-              <label>City<input required value={city} onChange={e => setCity(e.target.value)} /></label>
-              <label>State<input required value={state} onChange={e => setState(e.target.value.toUpperCase())} maxLength={2}/></label>
-              <label>ZIP<input required value={zip} onChange={e => setZip(e.target.value)} inputMode="numeric"/></label>
+              <label>{t('tx.city')}<input required value={city} onChange={e => setCity(e.target.value)} /></label>
+              <label>{t('tx.state')}<input required value={state} onChange={e => setState(e.target.value.toUpperCase())} maxLength={2}/></label>
+              <label>{t('tx.zip')}<input required value={zip} onChange={e => setZip(e.target.value)} inputMode="numeric"/></label>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><UploadCloud size={17}/> Documents <span>{files.length || 'No'} selected</span></div>
+            <div className={styles.cardTitle}><UploadCloud size={17}/> {t('lead.documents')} <span>{t('tx.selected', { n: files.length })}</span></div>
             <label className={styles.dropzone} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); addFiles(event.dataTransfer.files) }}>
               <UploadCloud size={28}/>
-              <strong>Tap to upload or drop files here</strong>
-              <small>PDF, Word, Excel and images · up to 20 files</small>
+              <strong>{t('tx.drop')}</strong>
+              <small>{t('tx.dropHint')}</small>
               <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp" onChange={event => addFiles(event.target.files)}/>
             </label>
 
@@ -165,7 +167,7 @@ export function TransactionForm({ userId, userEmail }: { userId: string; userEma
                 {files.map((file, index) => (
                   <div key={`${file.name}-${index}`} className={styles.fileRow}>
                     <FileText size={15}/><span>{file.name}</span><small>{formatBytes(file.size)}</small>
-                    <button type="button" onClick={() => setFiles(previous => previous.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                    <button type="button" onClick={() => setFiles(previous => previous.filter((_, itemIndex) => itemIndex !== index))}>{t('tx.remove')}</button>
                   </div>
                 ))}
               </div>
@@ -173,8 +175,8 @@ export function TransactionForm({ userId, userEmail }: { userId: string; userEma
           </section>
 
           {error && <div className={styles.error}>{error}</div>}
-          <button className={styles.submit} disabled={busy}>{busy ? <><Loader2 size={17} className={styles.spin}/> Uploading & submitting…</> : 'Submit Documents'}</button>
-          <Link href="/pipeline" className={styles.footerLink}>Back to rental pipeline</Link>
+          <button className={styles.submit} disabled={busy}>{busy ? <><Loader2 size={17} className={styles.spin}/> {t('tx.submitting')}</> : t('tx.submit')}</button>
+          <Link href="/deals" className={styles.footerLink}>{t('nav.myDeals')}</Link>
         </form>
       </section>
     </main>

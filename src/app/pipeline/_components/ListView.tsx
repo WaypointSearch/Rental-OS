@@ -99,7 +99,8 @@ export function ListView({
         flex: 1,
         overflowX: isMobile ? 'hidden' : 'auto',
         overflowY: 'auto',
-        padding: isMobile ? '8px' : '12px 16px',
+        // Leave room for the floating Submit Docs / Commission buttons
+        padding: isMobile ? '8px' : '12px 16px 56px',
       }}
     >
       {/* Mobile card layout */}

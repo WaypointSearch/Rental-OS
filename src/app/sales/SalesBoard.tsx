@@ -5,6 +5,13 @@ import Link from 'next/link'
 import { ArrowLeft, Building2, CalendarClock, DollarSign, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
 import styles from './sales.module.css'
+import { LanguageToggle, useI18n } from '@/lib/i18n'
+import type { TranslationKey } from '@/lib/i18n/dictionary'
+
+const SALES_WORDS_ES: Record<string, string> = {
+  buyer: 'comprador', seller: 'vendedor', client: 'cliente',
+  warm: 'tibio', hot: 'caliente', cold: 'frío', nurture: 'seguimiento',
+}
 
 const STAGES = ['New Lead', 'Contacted', 'Appointment Set', 'Active Client', 'Offer / Listing', 'Under Contract', 'Closed Won', 'Closed Lost'] as const
 
@@ -57,6 +64,9 @@ export function SalesBoard({ initialLeads, agentEmail, agentId, isAdmin, agents 
   agents: AgentLite[]
 }) {
   const supabase = useMemo(() => getSupabase(), [])
+  const { t, lang } = useI18n()
+  const sstage = (stage: string) => t(`sales.stage.${stage}` as TranslationKey)
+  const word = (value: string) => (lang === 'es' ? SALES_WORDS_ES[value] ?? value : value)
   const [leads, setLeads] = useState<SalesLead[]>(initialLeads)
   const [selected, setSelected] = useState<SalesLead | null>(null)
   const [creating, setCreating] = useState(false)
@@ -153,17 +163,17 @@ export function SalesBoard({ initialLeads, agentEmail, agentId, isAdmin, agents 
     <main className={styles.page}>
       <nav className={styles.nav}>
         <div className={styles.brand}><span className={styles.mark}><Building2 size={15}/></span><strong>Sun Ocean <b>Realty</b></strong>{isAdmin && <em>ADMIN</em>}</div>
-        <div className={styles.mode}><Link href="/pipeline">Rentals</Link><span>Sales</span></div>
-        <div className={styles.navRight}><span>{leads.length} leads</span><button onClick={() => setCreating(true)}><Plus size={14}/> New Sales Lead</button><Link href="/profile">Profile</Link></div>
+        <div className={styles.mode}><Link href="/pipeline">{t('nav.rentals')}</Link><span>{t('nav.sales')}</span></div>
+        <div className={styles.navRight}><span>{t('nav.leadsCount', { n: leads.length })}</span><LanguageToggle compact /><button onClick={() => setCreating(true)}><Plus size={14}/> {t('sales.new')}</button><Link href="/deals">{t('nav.myDeals')}</Link><Link href="/profile">{t('nav.profile')}</Link></div>
       </nav>
 
       <section className={styles.stats}>
-        <div><small>Total</small><strong>{leads.length}</strong></div><div><small>Active</small><strong>{activeCount}</strong></div><div><small>Buyers</small><strong>{buyers}</strong></div><div><small>Sellers</small><strong>{sellers}</strong></div><div><small>Closed Won</small><strong className={styles.green}>{wonCount}</strong></div>
+        <div><small>{t('sales.total')}</small><strong>{leads.length}</strong></div><div><small>{t('stats.active')}</small><strong>{activeCount}</strong></div><div><small>{t('sales.buyers')}</small><strong>{buyers}</strong></div><div><small>{t('sales.sellers')}</small><strong>{sellers}</strong></div><div><small>{t('sales.stage.Closed Won')}</small><strong className={styles.green}>{wonCount}</strong></div>
       </section>
 
       <section className={styles.filters}>
-        <label><Search size={14}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search sales leads…"/></label>
-        <Link href="/pipeline"><ArrowLeft size={13}/> Rental Pipeline</Link>
+        <label><Search size={14}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('sales.search')} aria-label={t('sales.search')}/></label>
+        <Link href="/pipeline"><ArrowLeft size={13}/> {t('sales.rentalPipeline')}</Link>
       </section>
 
       <section className={styles.board}>
@@ -171,12 +181,12 @@ export function SalesBoard({ initialLeads, agentEmail, agentId, isAdmin, agents 
           const stageLeads = filtered.filter(lead => lead.stage === stage)
           return (
             <div className={styles.column} key={stage}>
-              <header><span>{stage}</span><b>{stageLeads.length}</b></header>
+              <header><span>{sstage(stage)}</span><b>{stageLeads.length}</b></header>
               <div className={styles.columnBody}>
                 {stageLeads.map(lead => (
                   <button key={lead.id} className={`${styles.card} ${styles[stageTone(stage)]}`} onClick={() => setSelected(lead)}>
                     <div className={styles.cardTop}><strong>{lead.client_name}</strong><small>{age(lead.created_at)}</small></div>
-                    <div className={styles.chips}><span>{lead.client_type || 'buyer'}</span><span>{lead.lead_status || 'warm'}</span></div>
+                    <div className={styles.chips}><span>{word(lead.client_type || 'buyer')}</span><span>{word(lead.lead_status || 'warm')}</span></div>
                     {lead.target_areas && <p><MapPin size={12}/>{lead.target_areas}</p>}
                     {lead.property_address && <p><Building2 size={12}/>{lead.property_address}</p>}
                     {(money(lead.budget_max) || lead.desired_price) && <p><DollarSign size={12}/>{money(lead.budget_max) || lead.desired_price}</p>}
@@ -184,7 +194,7 @@ export function SalesBoard({ initialLeads, agentEmail, agentId, isAdmin, agents 
                     {isAdmin && <footer>{lead.agent_email.split('@')[0]}</footer>}
                   </button>
                 ))}
-                {!stageLeads.length && <div className={styles.empty}>Empty</div>}
+                {!stageLeads.length && <div className={styles.empty}>{t('sales.empty')}</div>}
               </div>
             </div>
           )
@@ -193,42 +203,42 @@ export function SalesBoard({ initialLeads, agentEmail, agentId, isAdmin, agents 
 
       {selected && (
         <aside className={styles.panel}>
-          <div className={styles.panelHead}><div><small>{selected.client_type || 'client'}</small><h2>{selected.client_name}</h2></div><button onClick={() => setSelected(null)}><X size={16}/></button></div>
-          <div className={styles.stagePicker}>{STAGES.map(stage => <button key={stage} className={selected.stage === stage ? styles.stageActive : ''} onClick={() => void updateLead(selected.id, { stage })}>{stage}</button>)}</div>
+          <div className={styles.panelHead}><div><small>{word(selected.client_type || 'client')}</small><h2>{selected.client_name}</h2></div><button onClick={() => setSelected(null)} aria-label={t('lead.close')}><X size={16}/></button></div>
+          <div className={styles.stagePicker}>{STAGES.map(stage => <button key={stage} className={selected.stage === stage ? styles.stageActive : ''} onClick={() => void updateLead(selected.id, { stage })}>{sstage(stage)}</button>)}</div>
           <section className={styles.panelCard}>
-            <h3>Contact</h3>
+            <h3>{t('sales.contact')}</h3>
             {selected.phone && <a href={`tel:${selected.phone}`}><Phone size={13}/>{selected.phone}</a>}
             {selected.email && <a href={`mailto:${selected.email}`}><Mail size={13}/>{selected.email}</a>}
-            {!selected.phone && !selected.email && <p>No contact details yet.</p>}
+            {!selected.phone && !selected.email && <p>{t('sales.noContact')}</p>}
           </section>
           <section className={styles.panelCard}>
-            <h3>Opportunity</h3>
-            <label>Lead status<select value={selected.lead_status || 'warm'} onChange={event => void updateLead(selected.id, { lead_status: event.target.value })}><option>warm</option><option>hot</option><option>cold</option><option>nurture</option></select></label>
-            <label>{selected.client_type === 'seller' ? 'Property address' : 'Target areas'}<input value={selected.client_type === 'seller' ? selected.property_address || '' : selected.target_areas || ''} onChange={event => setSelected(previous => previous ? { ...previous, ...(selected.client_type === 'seller' ? { property_address: event.target.value } : { target_areas: event.target.value }) } : previous)} onBlur={event => void updateLead(selected.id, selected.client_type === 'seller' ? { property_address: event.target.value } : { target_areas: event.target.value })}/></label>
-            <label>Next action<input value={selected.next_action || ''} onChange={event => setSelected(previous => previous ? { ...previous, next_action: event.target.value } : previous)} onBlur={event => void updateLead(selected.id, { next_action: event.target.value })}/></label>
-            <label>Notes<textarea value={selected.notes || ''} onChange={event => setSelected(previous => previous ? { ...previous, notes: event.target.value } : previous)} onBlur={event => void updateLead(selected.id, { notes: event.target.value })}/></label>
+            <h3>{t('sales.opportunity')}</h3>
+            <label>{t('sales.status')}<select value={selected.lead_status || 'warm'} onChange={event => void updateLead(selected.id, { lead_status: event.target.value })}><option value="warm">{word('warm')}</option><option value="hot">{word('hot')}</option><option value="cold">{word('cold')}</option><option value="nurture">{word('nurture')}</option></select></label>
+            <label>{selected.client_type === 'seller' ? t('tx.address') : t('sales.areas')}<input value={selected.client_type === 'seller' ? selected.property_address || '' : selected.target_areas || ''} onChange={event => setSelected(previous => previous ? { ...previous, ...(selected.client_type === 'seller' ? { property_address: event.target.value } : { target_areas: event.target.value }) } : previous)} onBlur={event => void updateLead(selected.id, selected.client_type === 'seller' ? { property_address: event.target.value } : { target_areas: event.target.value })}/></label>
+            <label>{t('sales.next')}<input value={selected.next_action || ''} onChange={event => setSelected(previous => previous ? { ...previous, next_action: event.target.value } : previous)} onBlur={event => void updateLead(selected.id, { next_action: event.target.value })}/></label>
+            <label>{t('sales.notes')}<textarea value={selected.notes || ''} onChange={event => setSelected(previous => previous ? { ...previous, notes: event.target.value } : previous)} onBlur={event => void updateLead(selected.id, { notes: event.target.value })}/></label>
           </section>
-          {isAdmin && <section className={styles.panelCard}><h3>Assigned Agent</h3><select value={selected.agent_email} onChange={event => void reassign(selected, event.target.value)}>{agents.map(agent => <option key={agent.id} value={agent.email}>{agent.full_name || agent.email}</option>)}</select></section>}
+          {isAdmin && <section className={styles.panelCard}><h3>{t('sales.assigned')}</h3><select value={selected.agent_email} onChange={event => void reassign(selected, event.target.value)}>{agents.map(agent => <option key={agent.id} value={agent.email}>{agent.full_name || agent.email}</option>)}</select></section>}
         </aside>
       )}
 
       {creating && (
         <div className={styles.modalBackdrop} onMouseDown={() => setCreating(false)}>
           <form className={styles.modal} onSubmit={createLead} onMouseDown={event => event.stopPropagation()}>
-            <div className={styles.modalHead}><div><small>SALES CRM</small><h2>New Sales Lead</h2></div><button type="button" onClick={() => setCreating(false)}><X size={16}/></button></div>
+            <div className={styles.modalHead}><div><small>{t('sales.crm')}</small><h2>{t('sales.new')}</h2></div><button type="button" onClick={() => setCreating(false)} aria-label={t('lead.cancel')}><X size={16}/></button></div>
             <div className={styles.grid2}>
-              <label>Client name<input required value={draft.client_name} onChange={event => setDraft(previous => ({ ...previous, client_name: event.target.value }))}/></label>
-              <label>Client type<select value={draft.client_type} onChange={event => setDraft(previous => ({ ...previous, client_type: event.target.value }))}><option value="buyer">Buyer</option><option value="seller">Seller</option></select></label>
-              <label>Phone<input value={draft.phone} onChange={event => setDraft(previous => ({ ...previous, phone: event.target.value }))}/></label>
-              <label>Email<input type="email" value={draft.email} onChange={event => setDraft(previous => ({ ...previous, email: event.target.value }))}/></label>
-              {draft.client_type === 'seller' ? <label className={styles.full}>Property address<input value={draft.property_address} onChange={event => setDraft(previous => ({ ...previous, property_address: event.target.value }))}/></label> : <label className={styles.full}>Target areas<input value={draft.target_areas} onChange={event => setDraft(previous => ({ ...previous, target_areas: event.target.value }))}/></label>}
-              {draft.client_type === 'seller' ? <label>Desired price<input value={draft.desired_price} onChange={event => setDraft(previous => ({ ...previous, desired_price: event.target.value }))}/></label> : <label>Budget max<input inputMode="decimal" value={draft.budget_max} onChange={event => setDraft(previous => ({ ...previous, budget_max: event.target.value }))}/></label>}
-              <label>Lead source<input value={draft.lead_source} onChange={event => setDraft(previous => ({ ...previous, lead_source: event.target.value }))} placeholder="Referral, Zillow, past client…"/></label>
-              <label className={styles.full}>Next action<input value={draft.next_action} onChange={event => setDraft(previous => ({ ...previous, next_action: event.target.value }))} placeholder="Call, send lender intro, schedule listing appointment…"/></label>
-              <label className={styles.full}>Notes<textarea value={draft.notes} onChange={event => setDraft(previous => ({ ...previous, notes: event.target.value }))}/></label>
-              {isAdmin && <label className={styles.full}>Assign to<select value={draft.agent_email} onChange={event => setDraft(previous => ({ ...previous, agent_email: event.target.value }))}>{agents.map(agent => <option key={agent.id} value={agent.email}>{agent.full_name || agent.email}</option>)}</select></label>}
+              <label>{t('cm.clientName')}<input required value={draft.client_name} onChange={event => setDraft(previous => ({ ...previous, client_name: event.target.value }))}/></label>
+              <label>{t('sales.clientType')}<select value={draft.client_type} onChange={event => setDraft(previous => ({ ...previous, client_type: event.target.value }))}><option value="buyer">{word('buyer')}</option><option value="seller">{word('seller')}</option></select></label>
+              <label>{t('new.phone')}<input value={draft.phone} onChange={event => setDraft(previous => ({ ...previous, phone: event.target.value }))}/></label>
+              <label>{t('profile.email')}<input type="email" value={draft.email} onChange={event => setDraft(previous => ({ ...previous, email: event.target.value }))}/></label>
+              {draft.client_type === 'seller' ? <label className={styles.full}>{t('tx.address')}<input value={draft.property_address} onChange={event => setDraft(previous => ({ ...previous, property_address: event.target.value }))}/></label> : <label className={styles.full}>{t('sales.areas')}<input value={draft.target_areas} onChange={event => setDraft(previous => ({ ...previous, target_areas: event.target.value }))}/></label>}
+              {draft.client_type === 'seller' ? <label>{t('sales.price')}<input value={draft.desired_price} onChange={event => setDraft(previous => ({ ...previous, desired_price: event.target.value }))}/></label> : <label>{t('sales.budgetMax')}<input inputMode="decimal" value={draft.budget_max} onChange={event => setDraft(previous => ({ ...previous, budget_max: event.target.value }))}/></label>}
+              <label>{t('sales.source')}<input value={draft.lead_source} onChange={event => setDraft(previous => ({ ...previous, lead_source: event.target.value }))} placeholder={t('sales.sourcePh')}/></label>
+              <label className={styles.full}>{t('sales.next')}<input value={draft.next_action} onChange={event => setDraft(previous => ({ ...previous, next_action: event.target.value }))} placeholder={t('sales.nextPh')}/></label>
+              <label className={styles.full}>{t('sales.notes')}<textarea value={draft.notes} onChange={event => setDraft(previous => ({ ...previous, notes: event.target.value }))}/></label>
+              {isAdmin && <label className={styles.full}>{t('sales.assignTo')}<select value={draft.agent_email} onChange={event => setDraft(previous => ({ ...previous, agent_email: event.target.value }))}>{agents.map(agent => <option key={agent.id} value={agent.email}>{agent.full_name || agent.email}</option>)}</select></label>}
             </div>
-            <button className={styles.createButton} disabled={saving}>{saving ? 'Creating…' : 'Create Sales Lead'}</button>
+            <button className={styles.createButton} disabled={saving}>{saving ? t('new.creating') : t('sales.create')}</button>
           </form>
         </div>
       )}

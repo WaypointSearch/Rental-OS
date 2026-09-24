@@ -39,6 +39,7 @@ export async function middleware(request: NextRequest) {
 
   const isPublic =
     pathname === '/login' ||
+    pathname === '/llms.txt' ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/api/')
 

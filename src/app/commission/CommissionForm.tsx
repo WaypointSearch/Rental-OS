@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Banknote, Building2, CheckCircle2, FileText, Home, Loader2, Receipt, UploadCloud } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
 import styles from './commission.module.css'
+import { useI18n } from '@/lib/i18n'
 
 type DealType = 'rental' | 'sale'
 type PaymentMethod = 'zelle' | 'printable_check' | 'ach' | 'wire'
@@ -37,6 +38,7 @@ async function uploadFiles(
 
 export function CommissionForm({ userId, userEmail }: { userId: string; userEmail: string }) {
   const supabase = useMemo(() => getSupabase(), [])
+  const { t } = useI18n()
   const [type, setType] = useState<DealType>('rental')
   const [clientName, setClientName] = useState('')
   const [address, setAddress] = useState('')
@@ -66,19 +68,19 @@ export function CommissionForm({ userId, userEmail }: { userId: string; userEmai
 
     const numericAmount = Number(amount.replace(/[$,\s]/g, ''))
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError('Enter a valid expected net commission amount.')
+      setError(t('cm.errAmount'))
       return
     }
     if (depositMade === null) {
-      setError('Tell us whether the commission was deposited into the brokerage account.')
+      setError(t('cm.errDeposit'))
       return
     }
     if (!depositMade && !noDepositReason.trim()) {
-      setError('Please explain why there is no brokerage deposit yet.')
+      setError(t('cm.errReason'))
       return
     }
     if (paymentMethod === 'zelle' && !zelleValue.trim()) {
-      setError('Enter the phone number or email you want used for Zelle.')
+      setError(t('cm.errZelle'))
       return
     }
 
@@ -128,7 +130,7 @@ export function CommissionForm({ userId, userEmail }: { userId: string; userEmai
       setFinalDocs([])
       setZelleValue('')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not submit your commission request.')
+      setError(caught instanceof Error ? caught.message : t('cm.failed'))
     } finally {
       setBusy(false)
     }
@@ -138,93 +140,93 @@ export function CommissionForm({ userId, userEmail }: { userId: string; userEmai
     <main className={styles.page}>
       <section className={styles.shell}>
         <header className={styles.header}>
-          <Link href="/pipeline" className={styles.back}><ArrowLeft size={16}/> Pipeline</Link>
+          <Link href="/deals" className={styles.back}><ArrowLeft size={16}/> {t('nav.myDeals')}</Link>
           <div>
-            <p className={styles.eyebrow}>Sun Ocean Realty · Agent Operations</p>
-            <h1>Request Commission</h1>
-            <p>Submit the transaction details and choose how you want to be paid.</p>
+            <p className={styles.eyebrow}>{t('tx.eyebrow')}</p>
+            <h1>{t('nav.requestCommission')}</h1>
+            <p>{t('cm.sub')}</p>
           </div>
         </header>
 
         {success && (
           <div className={styles.success}>
             <CheckCircle2 size={21}/>
-            <div><strong>Commission request submitted.</strong><span>It is now visible in the broker Records center.</span></div>
+            <div><strong>{t('cm.success')}</strong><span>{t('cm.successHint')}</span></div>
           </div>
         )}
 
         <form onSubmit={submit} className={styles.form}>
           <section className={styles.card}>
-            <div className={styles.segmentLabel}>Transaction type</div>
+            <div className={styles.segmentLabel}>{t('cm.type')}</div>
             <div className={styles.segment}>
-              <button type="button" className={type === 'rental' ? styles.active : ''} onClick={() => setType('rental')}><Home size={16}/> Rental</button>
-              <button type="button" className={type === 'sale' ? styles.active : ''} onClick={() => setType('sale')}><Building2 size={16}/> Sale</button>
+              <button type="button" className={type === 'rental' ? styles.active : ''} onClick={() => setType('rental')}><Home size={16}/> {t('deals.rental')}</button>
+              <button type="button" className={type === 'sale' ? styles.active : ''} onClick={() => setType('sale')}><Building2 size={16}/> {t('deals.sale')}</button>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><FileText size={17}/> Client & property</div>
-            <label>Client name<input required value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith"/></label>
-            <label>Property address<input required value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St"/></label>
+            <div className={styles.cardTitle}><FileText size={17}/> {t('cm.clientProperty')}</div>
+            <label>{t('cm.clientName')}<input required value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Smith"/></label>
+            <label>{t('tx.address')}<input required value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St"/></label>
             <div className={styles.row3}>
-              <label>City<input required value={city} onChange={e => setCity(e.target.value)}/></label>
-              <label>State<input required value={state} onChange={e => setState(e.target.value.toUpperCase())} maxLength={2}/></label>
-              <label>ZIP<input required value={zip} onChange={e => setZip(e.target.value)} inputMode="numeric"/></label>
+              <label>{t('tx.city')}<input required value={city} onChange={e => setCity(e.target.value)}/></label>
+              <label>{t('tx.state')}<input required value={state} onChange={e => setState(e.target.value.toUpperCase())} maxLength={2}/></label>
+              <label>{t('tx.zip')}<input required value={zip} onChange={e => setZip(e.target.value)} inputMode="numeric"/></label>
             </div>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><Banknote size={17}/> Expected net commission</div>
-            <label>Amount<input required value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" placeholder="$ 0.00"/></label>
+            <div className={styles.cardTitle}><Banknote size={17}/> {t('cm.expected')}</div>
+            <label>{t('cm.amount')}<input required value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" placeholder="$ 0.00"/></label>
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><Receipt size={17}/> Brokerage deposit</div>
-            <p className={styles.hint}>Did you deposit or deliver the commission into the Sun Ocean Realty account?</p>
+            <div className={styles.cardTitle}><Receipt size={17}/> {t('cm.deposit')}</div>
+            <p className={styles.hint}>{t('cm.depositQ')}</p>
             <div className={styles.segment}>
-              <button type="button" className={depositMade === true ? styles.activeGreen : ''} onClick={() => setDepositMade(true)}>Yes</button>
-              <button type="button" className={depositMade === false ? styles.activeDanger : ''} onClick={() => setDepositMade(false)}>No</button>
+              <button type="button" className={depositMade === true ? styles.activeGreen : ''} onClick={() => setDepositMade(true)}>{t('cm.yes')}</button>
+              <button type="button" className={depositMade === false ? styles.activeDanger : ''} onClick={() => setDepositMade(false)}>{t('cm.no')}</button>
             </div>
             {depositMade === true && (
-              <label className={styles.uploadMini}><UploadCloud size={18}/><span>{depositReceipt ? depositReceipt.name : 'Upload deposit receipt (optional)'}</span><input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={e => setDepositReceipt(e.target.files?.[0] ?? null)}/></label>
+              <label className={styles.uploadMini}><UploadCloud size={18}/><span>{depositReceipt ? depositReceipt.name : t('cm.receipt')}</span><input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={e => setDepositReceipt(e.target.files?.[0] ?? null)}/></label>
             )}
             {depositMade === false && (
-              <label>Reason<textarea required value={noDepositReason} onChange={e => setNoDepositReason(e.target.value)} placeholder="Example: listing brokerage is mailing the check directly to the office."/></label>
+              <label>{t('cm.reason')}<textarea required value={noDepositReason} onChange={e => setNoDepositReason(e.target.value)} placeholder={t('cm.reasonPlaceholder')}/></label>
             )}
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><UploadCloud size={17}/> Final documents <span>optional</span></div>
+            <div className={styles.cardTitle}><UploadCloud size={17}/> {t('cm.finalDocs')} <span>{t('cm.optional')}</span></div>
             <label className={styles.dropzone}>
-              <UploadCloud size={25}/><strong>Tap to upload final documents</strong><small>Executed lease/contract, addenda, receipts, closing docs</small>
+              <UploadCloud size={25}/><strong>{t('cm.finalDrop')}</strong><small>{t('cm.finalHint')}</small>
               <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp" onChange={e => addFinalDocs(e.target.files)}/>
             </label>
-            {finalDocs.length > 0 && <div className={styles.fileCount}>{finalDocs.length} file{finalDocs.length === 1 ? '' : 's'} ready to upload</div>}
+            {finalDocs.length > 0 && <div className={styles.fileCount}>{t('cm.ready', { n: finalDocs.length })}</div>}
           </section>
 
           <section className={styles.card}>
-            <div className={styles.cardTitle}><Banknote size={17}/> How would you like to get paid?</div>
+            <div className={styles.cardTitle}><Banknote size={17}/> {t('cm.howPaid')}</div>
             <div className={styles.paymentGrid}>
               {([
-                ['zelle', 'Zelle', '$2,500 max'],
-                ['printable_check', 'Email Printable Check', 'Print or mobile deposit'],
-                ['ach', 'ACH Direct Deposit', 'Broker coordinates securely'],
-                ['wire', 'Bank Wire', '$35 fee'],
-              ] as const).map(([value, label, caption]) => (
+                ['zelle', 'Zelle', t('cm.zelleHint')],
+                ['printable_check', t('cm.check'), t('cm.checkHint')],
+                ['ach', t('cm.ach'), t('cm.achHint')],
+                ['wire', t('cm.wire'), t('cm.wireHint')],
+              ] as [PaymentMethod, string, string][]).map(([value, label, caption]) => (
                 <button key={value} type="button" className={paymentMethod === value ? styles.paymentActive : ''} onClick={() => setPaymentMethod(value)}>
                   <strong>{label}</strong><small>{caption}</small>
                 </button>
               ))}
             </div>
             {paymentMethod === 'zelle' ? (
-              <label>Zelle phone or email<input value={zelleValue} onChange={e => setZelleValue(e.target.value)} placeholder="9545551212 or agent@email.com"/></label>
+              <label>{t('cm.zelle')}<input value={zelleValue} onChange={e => setZelleValue(e.target.value)} placeholder={t('cm.zellePlaceholder')}/></label>
             ) : (
-              <div className={styles.secureNote}>For security, bank account or routing numbers are not stored here. The broker will coordinate those details directly after approval.</div>
+              <div className={styles.secureNote}>{t('cm.secure')}</div>
             )}
           </section>
 
           {error && <div className={styles.error}>{error}</div>}
-          <button className={styles.submit} disabled={busy}>{busy ? <><Loader2 size={17} className={styles.spin}/> Submitting…</> : 'Request Commission'}</button>
+          <button className={styles.submit} disabled={busy}>{busy ? <><Loader2 size={17} className={styles.spin}/> {t('cm.submitting')}</> : t('nav.requestCommission')}</button>
         </form>
       </section>
     </main>

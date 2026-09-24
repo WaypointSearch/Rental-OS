@@ -14,12 +14,14 @@ import {
   Zap,
 } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
+import { LanguageToggle, useI18n } from '@/lib/i18n'
 
 type Mode = 'password' | 'magic'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = getSupabase()
+  const { t } = useI18n()
 
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
@@ -63,19 +65,20 @@ export default function LoginPage() {
         </div>
 
         <div className="ros-login-message">
-          <div className="ros-login-kicker">Rental operations, simplified</div>
-          <h1>Every lead.<br/>One clean system.</h1>
+          <div className="ros-login-kicker">{t('login.kicker')}</div>
+          <h1>{t('login.h1a')}<br/>{t('login.h1b')}</h1>
           <p>
-            Qualify, assign, show, apply and close without losing the thread. Rental OS keeps the whole team moving from first text to move-in.
+            {t('login.pitch')}
           </p>
           <div className="ros-login-proof">
-            <span className="ros-proof-pill"><Zap size={13}/> Realtime lead updates</span>
-            <span className="ros-proof-pill"><ShieldCheck size={13}/> Agent-specific access</span>
-            <span className="ros-proof-pill"><Sparkles size={13}/> AI-assisted intake</span>
+            <span className="ros-proof-pill"><Zap size={13}/> {t('login.p1')}</span>
+            <span className="ros-proof-pill"><ShieldCheck size={13}/> {t('login.p2')}</span>
+            <span className="ros-proof-pill"><Sparkles size={13}/> {t('login.p3')}</span>
           </div>
         </div>
 
-        <div className="ros-login-footer">Private workspace for Sun Ocean Realty agents.</div>
+        <div style={{ marginTop: 18 }}><LanguageToggle /></div>
+        <div className="ros-login-footer">{t('login.footer')}</div>
       </section>
 
       <section className="ros-login-side">
@@ -83,21 +86,21 @@ export default function LoginPage() {
           {sent ? (
             <div className="ros-auth-success">
               <div className="ros-auth-success-icon"><CheckCircle2 size={25}/></div>
-              <h3>Check your inbox</h3>
-              <p>We sent a secure sign-in link to <strong>{email}</strong>. Open it on this device to enter Rental OS.</p>
+              <h3>{t('login.inbox')}</h3>
+              <p>{t('login.sentA')} <strong>{email}</strong>. {t('login.sentB')}</p>
               <button
                 className="ros-btn"
                 type="button"
                 style={{ marginTop: 18 }}
                 onClick={() => { setSent(false); setEmail('') }}
               >
-                Use another email
+                {t('login.another')}
               </button>
             </div>
           ) : (
             <>
-              <h2>Welcome back</h2>
-              <p>Sign in with your agent password, or use a one-time magic link.</p>
+              <h2>{t('login.welcome')}</h2>
+              <p>{t('login.how')}</p>
 
               <div className="ros-auth-tabs">
                 <button
@@ -105,20 +108,20 @@ export default function LoginPage() {
                   className={`ros-auth-tab ${mode === 'password' ? 'is-active' : ''}`}
                   onClick={() => { setMode('password'); setError(null) }}
                 >
-                  Password
+                  {t('login.password')}
                 </button>
                 <button
                   type="button"
                   className={`ros-auth-tab ${mode === 'magic' ? 'is-active' : ''}`}
                   onClick={() => { setMode('magic'); setError(null) }}
                 >
-                  Magic link
+                  {t('login.magic')}
                 </button>
               </div>
 
               <form onSubmit={handleSubmit}>
                 <div className="ros-field">
-                  <label>Email</label>
+                  <label>{t('profile.email')}</label>
                   <div className="ros-field-wrap">
                     <Mail className="ros-field-icon" size={15}/>
                     <input
@@ -128,14 +131,14 @@ export default function LoginPage() {
                       onChange={event => setEmail(event.target.value)}
                       required
                       autoComplete="email"
-                      placeholder="you@brokerage.com"
+                      placeholder={t('login.emailPh')}
                     />
                   </div>
                 </div>
 
                 {mode === 'password' && (
                   <div className="ros-field">
-                    <label>Password</label>
+                    <label>{t('login.password')}</label>
                     <div className="ros-field-wrap">
                       <KeyRound className="ros-field-icon" size={15}/>
                       <input
@@ -145,7 +148,7 @@ export default function LoginPage() {
                         onChange={event => setPassword(event.target.value)}
                         required
                         autoComplete="current-password"
-                        placeholder="Your password"
+                        placeholder={t('login.passwordPh')}
                       />
                     </div>
                   </div>
@@ -155,16 +158,16 @@ export default function LoginPage() {
 
                 <button className="ros-auth-submit" type="submit" disabled={loading}>
                   {loading
-                    ? 'Signing in…'
+                    ? t('login.signingIn')
                     : mode === 'password'
-                      ? <><LockKeyhole size={15}/> Sign in <ArrowRight size={14}/></>
-                      : <><Mail size={15}/> Send magic link <ArrowRight size={14}/></>
+                      ? <><LockKeyhole size={15}/> {t('login.signIn')} <ArrowRight size={14}/></>
+                      : <><Mail size={15}/> {t('login.sendMagic')} <ArrowRight size={14}/></>
                   }
                 </button>
               </form>
 
               <div style={{ marginTop: 16, color: '#60758e', fontSize: 10, lineHeight: 1.6, textAlign: 'center' }}>
-                New agent? Use the invitation sent by your broker to activate your account.
+                {t('login.newAgent')}
               </div>
             </>
           )}

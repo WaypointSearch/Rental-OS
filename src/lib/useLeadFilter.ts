@@ -11,6 +11,8 @@ export interface FilterState {
   source: SourceFilter
   sort: SortKey
   agent: string
+  /** 'all' or one of STAGES */
+  stage: string
 }
 
 const DEFAULT_FILTER: FilterState = {
@@ -18,6 +20,7 @@ const DEFAULT_FILTER: FilterState = {
   source: 'all',
   sort: 'newest',
   agent: 'all',
+  stage: 'all',
 }
 
 export function useLeadFilter(leads: Lead[]) {
@@ -59,6 +62,11 @@ export function useLeadFilter(leads: Lead[]) {
     // Agent filter
     if (filter.agent !== 'all') {
       result = result.filter((l) => l.assigned_agent === filter.agent)
+    }
+
+    // Stage filter (mobile stage tabs)
+    if (filter.stage !== 'all') {
+      result = result.filter((l) => l.stage === filter.stage)
     }
 
     // Sort
@@ -103,7 +111,8 @@ export function useLeadFilter(leads: Lead[]) {
     filter.query !== '' ||
     filter.source !== 'all' ||
     filter.sort !== 'newest' ||
-    filter.agent !== 'all'
+    filter.agent !== 'all' ||
+    filter.stage !== 'all'
 
   return { filter, update, reset, filtered, agents, isFiltered }
 }

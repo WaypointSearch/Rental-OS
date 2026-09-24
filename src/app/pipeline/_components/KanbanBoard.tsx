@@ -16,12 +16,15 @@ import { StatsBar } from './StatsBar'
 import { FilterBar } from './FilterBar'
 import { LeadCreateModal } from './LeadCreateModal'
 import { DispatchModal } from './DispatchModal'
+import { MobileLeadList, MobileLeadsHeader, MobileTabBar } from './MobileAgent'
 import { useLeadsRealtime } from '@/lib/useLeadsRealtime'
 import { useLeadFilter } from '@/lib/useLeadFilter'
 import { useToast, ToastProvider } from '@/lib/useToast'
 import { exportLeadsToCSV } from '@/lib/exportCSV'
 import { getSupabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { LanguageToggle, useI18n } from '@/lib/i18n'
 
 interface KanbanBoardProps {
   initialLeads: Lead[]
@@ -38,6 +41,7 @@ function BoardInner({
   const supabase = getSupabase()
   const router   = useRouter()
   const { push: toast } = useToast()
+  const { t, stage: stageName } = useI18n()
 
   const [leads,       setLeads]       = useState<Lead[]>(initialLeads)
   const [selected,    setSelected]    = useState<Lead | null>(null)
@@ -46,6 +50,7 @@ function BoardInner({
   const [viewMode,    setViewMode]    = useState<'kanban' | 'list'>('kanban')
   const [avatarMap,   setAvatarMap]   = useState(initAvatarMap)
   const [isMobile,    setIsMobile]    = useState(false)
+  const [navWidth,    setNavWidth]    = useState(1440)
   // Dispatch modal state (admin-only)
   const [dispatchLead, setDispatchLead] = useState<Lead | null>(null)
   const [allAgents,    setAllAgents]    = useState<AgentProfile[]>([])
@@ -55,12 +60,22 @@ function BoardInner({
     const check = () => {
       const mobile = window.innerWidth < 768
       setIsMobile(mobile)
+      setNavWidth(window.innerWidth)
       if (mobile && viewMode === 'kanban') setViewMode('list')
     }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, []) // eslint-disable-line
+
+  // /pipeline?new=1 (from My Deals) opens the New Lead form straight away
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('new') === '1') {
+      setShowCreate(true)
+      window.history.replaceState(null, '', '/pipeline')
+    }
+  }, [])
 
   // Lazy-load agents when dispatch modal needs them (admin only)
   async function openDispatch(lead: Lead) {
@@ -79,7 +94,7 @@ function BoardInner({
     setLeads(p => p.find(l => l.id === lead.id) ? p : [lead, ...p])
     toast({
       type: 'lead',
-      title: 'New lead arrived',
+      title: t('toast.newLead'),
       body: `${lead.name ?? lead.id}`,
       duration: 8000,
     })
@@ -147,9 +162,21 @@ function BoardInner({
     }
     if (aLead.stage !== overStage) {
       await supabase.from('leads').update({ stage: overStage }).eq('id', aId)
-      toast({ type: 'success', title: 'Stage updated', body: `→ ${overStage}` })
+      toast({ type: 'success', title: t('toast.stageUpdated'), body: `→ ${stageName(overStage)}` })
     }
     if (selected?.id === aId) setSelected(p => p ? { ...p, stage: overStage } : p)
+  }
+
+  async function advanceStage(lead: Lead, stage: string) {
+    const previous = lead.stage
+    setLeads(p => p.map(l => l.id === lead.id ? { ...l, stage } : l))
+    const { error } = await supabase.from('leads').update({ stage }).eq('id', lead.id)
+    if (error) {
+      setLeads(p => p.map(l => l.id === lead.id ? { ...l, stage: previous } : l))
+      toast({ type: 'info', title: t('toast.stageNotSaved'), body: error.message })
+      return
+    }
+    toast({ type: 'success', title: t('toast.moved', { name: lead.name ?? '' }).trim(), body: `→ ${stageName(stage)}` })
   }
 
   function handleLeadUpdated(updated: Lead) {
@@ -159,7 +186,7 @@ function BoardInner({
 
   function handleLeadCreated(lead: Lead) {
     setLeads(p => [lead, ...p])
-    toast({ type: 'success', title: 'Lead created', body: lead.name ?? lead.id })
+    toast({ type: 'success', title: t('toast.leadCreated'), body: lead.name ?? lead.id })
     // If admin, auto-open dispatch for new manual lead if unassigned
     if (isAdmin && (!lead.assigned_agent || lead.assigned_agent === 'Unassigned')) {
       openDispatch(lead)
@@ -171,14 +198,16 @@ function BoardInner({
   function handleDeleteLead(id: string) {
     setLeads(p => p.filter(l => l.id !== id))
     setSelected(null)
-    toast({ type: 'info', title: 'Lead deleted' })
+    toast({ type: 'info', title: t('toast.leadDeleted') })
   }
 
-  function handleAssigned(updatedLead: Lead, agentEmail: string) {
+  function handleAssigned(updatedLead: Lead, agentEmail: string, warning?: string) {
     setLeads(p => p.map(l => l.id === updatedLead.id ? updatedLead : l))
     setDispatchLead(null)
     setSelected(updatedLead)
-    toast({ type: 'success', title: 'Lead assigned', body: `→ ${agentEmail.split('@')[0]}` })
+    const type = updatedLead.assignment_type ? ` · ${t(updatedLead.assignment_type === 'full' ? 'type.full' : 'type.showing')}` : ''
+    toast({ type: 'success', title: t('toast.assigned'), body: `→ ${agentEmail.split('@')[0]}${type}` })
+    if (warning) toast({ type: 'info', title: t('toast.headsUp'), body: warning, duration: 10000 })
   }
 
   async function signOut() {
@@ -187,6 +216,15 @@ function BoardInner({
   }
 
   const avatarUrl = agentProfile?.avatar_url ?? avatarMap[agentEmail] ?? null
+  // While a lead is open full-screen on a phone, the list behind it stays mounted
+  // (keeping its scroll position) but is hidden from assistive tech and AI agents.
+  const backgroundWhileOpen = isMobile && selected
+    ? { 'aria-hidden': true, inert: true } as Record<string, unknown>
+    : {}
+  // Drop lower-priority nav labels as the viewport narrows so nothing overlaps
+  const navCompact = navWidth < 1200
+  const navTight   = navWidth < 1000
+  const navNarrow  = navWidth < 900
 
   return (
     <div style={{
@@ -228,7 +266,7 @@ function BoardInner({
               <path d="M4 17 Q10 13 16 17" stroke="white" strokeWidth="1.5" fill="none" opacity="0.6" strokeLinecap="round"/>
             </svg>
           </div>
-          {!isMobile && (
+          {!isMobile && !navTight && (
             <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.3px', color: '#f0f6fc' }}>
               Sun Ocean<span style={{ color: '#f5a623', marginLeft: 4 }}>Realty</span>
             </span>
@@ -242,7 +280,24 @@ function BoardInner({
           )}
         </div>
 
-        {/* Centre: view toggle — hide on mobile */}
+        {/* Centre: workspace switch + view toggle (view toggle hidden on mobile) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div aria-label="CRM workspace" style={{
+            display: 'flex',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 8, padding: 3, gap: 2,
+          }}>
+            <span style={{
+              background: 'rgba(56,139,253,0.22)', border: '0.5px solid rgba(56,139,253,0.4)',
+              color: '#388bfd', borderRadius: 5, padding: isMobile ? '4px 9px' : '4px 12px',
+              fontSize: 12, fontWeight: 600,
+            }}>{t('nav.rentals')}</span>
+            <Link href="/sales" style={{
+              border: '0.5px solid transparent', color: '#6e7681', borderRadius: 5,
+              padding: isMobile ? '4px 9px' : '4px 12px', fontSize: 12, textDecoration: 'none',
+            }}>{t('nav.sales')}</Link>
+          </div>
         {!isMobile && (
           <div style={{
             display: 'flex',
@@ -251,36 +306,37 @@ function BoardInner({
             borderRadius: 8, padding: 3, gap: 2,
           }}>
             {(['kanban', 'list'] as const).map(mode => (
-              <button key={mode} onClick={() => setViewMode(mode)} style={{
+              <button key={mode} onClick={() => setViewMode(mode)} title={t(mode === 'kanban' ? 'nav.kanban' : 'nav.list')} style={{
                 background: viewMode === mode ? 'rgba(56,139,253,0.22)' : 'transparent',
                 border: viewMode === mode ? '0.5px solid rgba(56,139,253,0.4)' : '0.5px solid transparent',
                 color: viewMode === mode ? '#388bfd' : '#6e7681',
-                borderRadius: 5, padding: '4px 12px',
+                borderRadius: 5, padding: navNarrow ? '4px 9px' : '4px 12px', whiteSpace: 'nowrap',
                 fontSize: 12, fontWeight: viewMode === mode ? 600 : 400,
                 cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
               }}>
-                {mode === 'kanban' ? '⊞ Kanban' : '☰ List'}
+                {mode === 'kanban' ? (navNarrow ? '⊞' : `⊞ ${t('nav.kanban')}`) : (navNarrow ? '☰' : `☰ ${t('nav.list')}`)}
               </button>
             ))}
           </div>
         )}
+        </div>
 
         {/* Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, flexShrink: 0 }}>
-          {!isMobile && <span style={{ fontSize: 12, color: '#6e7681' }}>{leads.length} leads</span>}
+          {!isMobile && !navCompact && <span style={{ fontSize: 12, color: '#6e7681' }}>{t('nav.leadsCount', { n: leads.length })}</span>}
 
           {isAdmin && !isMobile && (
             <button onClick={() => router.push('/admin')} style={{
               background: 'rgba(163,113,247,0.1)',
               border: '0.5px solid rgba(163,113,247,0.3)',
               color: '#a371f7', padding: '5px 11px', borderRadius: 6,
-              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
             }}>
-              God Mode
+              {t('nav.godMode')}
             </button>
           )}
 
-          <button onClick={() => setShowCreate(true)} style={{
+          {!isMobile && <button onClick={() => setShowCreate(true)} style={{
             background: 'linear-gradient(135deg, #0550ae, #388bfd)',
             color: '#fff', border: 'none', borderRadius: 6,
             padding: '5px 13px', fontSize: 12, fontWeight: 600,
@@ -288,8 +344,8 @@ function BoardInner({
             display: 'flex', alignItems: 'center', gap: 5,
             boxShadow: '0 2px 8px rgba(56,139,253,0.28)',
           }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{isMobile ? '' : ' New Lead'}
-          </button>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>{' '}{navNarrow ? t('nav.new') : t('nav.newLead')}
+          </button>}
 
           {isAdmin && !isMobile && (
             <button onClick={() => exportLeadsToCSV(filtered)} style={{
@@ -302,7 +358,7 @@ function BoardInner({
             </button>
           )}
 
-          <div onClick={() => router.push('/profile')} title="My Profile" style={{
+          {!isMobile && <div onClick={() => router.push('/profile')} title="My Profile" role="link" aria-label="My profile" style={{
             display: 'flex', alignItems: 'center', gap: 6,
             cursor: 'pointer', padding: '4px 8px',
             borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)',
@@ -321,17 +377,19 @@ function BoardInner({
                 : agentEmail.slice(0, 2).toUpperCase()
               }
             </div>
-            {!isMobile && <span style={{ fontSize: 11, color: '#8b949e' }}>Profile</span>}
-          </div>
+            {!navCompact && <span style={{ fontSize: 11, color: '#8b949e' }}>{t('nav.profile')}</span>}
+          </div>}
 
           {!isMobile && (
             <button onClick={signOut} style={{
               background: 'none', border: 'none', color: '#6e7681',
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
             }}>
-              Sign out
+              {t('nav.signOut')}
             </button>
           )}
+
+          <LanguageToggle compact={isMobile || navNarrow} />
 
           {/* Dark/Light mode toggle */}
           <button onClick={() => {
@@ -351,37 +409,60 @@ function BoardInner({
             cursor: 'pointer', fontSize: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
-          }} title="Toggle light/dark mode">
+          }} title={t('nav.theme')} aria-label={t('nav.theme')}>
             ◐
           </button>
         </div>
       </nav>
 
-      {/* ── Stats ─────────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 9, flexShrink: 0 }}>
-        <StatsBar leads={leads} isAdmin={isAdmin} />
-      </div>
+      {isMobile ? (
+        /* ── Mobile: search + stage tabs ─────────────────────────────────── */
+        <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }} {...backgroundWhileOpen}>
+          <MobileLeadsHeader
+            total={leads.length} visible={filtered.length}
+            query={filter.query} stage={filter.stage} leads={leads}
+            onQuery={query => setFilter({ query })}
+            onStage={stage => setFilter({ stage })}
+          />
+        </div>
+      ) : (
+        <>
+          {/* ── Stats ───────────────────────────────────────────────────────── */}
+          <div style={{ position: 'relative', zIndex: 9, flexShrink: 0 }}>
+            <StatsBar leads={leads} isAdmin={isAdmin} />
+          </div>
 
-      {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }}>
-        <FilterBar
-          filter={filter} agents={agents} isFiltered={isFiltered}
-          onUpdate={setFilter} onReset={resetFilter}
-          totalVisible={filtered.length} totalAll={leads.length}
-        />
-      </div>
+          {/* ── Filters ─────────────────────────────────────────────────────── */}
+          <div style={{ position: 'relative', zIndex: 8, flexShrink: 0 }}>
+            <FilterBar
+              filter={filter} agents={agents} isFiltered={isFiltered}
+              onUpdate={setFilter} onReset={resetFilter}
+              totalVisible={filtered.length} totalAll={leads.length}
+            />
+          </div>
+        </>
+      )}
 
       {/* ── Board + Panel ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative', zIndex: 1 }}>
-        {viewMode === 'kanban' ? (
+      {/* No z-index here: it would trap the full-screen mobile lead view beneath the nav */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+        {isMobile ? (
+          <MobileLeadList
+            {...backgroundWhileOpen}
+            leads={filtered}
+            onOpen={lead => setSelected(lead)}
+            onAdvance={advanceStage}
+            emptyText={leads.length === 0 ? t('m.noLeadsYet') : t('m.noMatch')}
+          />
+        ) : viewMode === 'kanban' ? (
           <div style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden', padding: '12px 12px 0', minWidth: 0 }}>
-            <DndContext
+            <DndContext id="pipeline-board"
               sensors={sensors} collisionDetection={closestCorners}
               onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}
             >
               <div style={{
                 display: 'flex', gap: 10, height: '100%',
-                minWidth: 'max-content', alignItems: 'stretch', paddingBottom: 12,
+                minWidth: 'max-content', alignItems: 'stretch', paddingBottom: 56,
               }}>
                 {STAGES.map(stage => (
                   <StageColumn key={stage} stage={stage}
@@ -418,23 +499,25 @@ function BoardInner({
               background: 'rgba(13,16,28,0.95)',
               display: 'flex', alignItems: 'center', gap: 12,
             }}>
-              <button onClick={() => setSelected(null)} style={{
+              <button type="button" onClick={() => setSelected(null)} aria-label={t('m.backToLeads')} style={{
                 background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
                 color: '#e6edf3', borderRadius: 8, padding: '8px 16px',
                 fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
-                ← Back
+                ← {t('m.back')}
               </button>
               <span style={{ fontSize: 14, color: '#f0f6fc', fontWeight: 600 }}>{selected.name ?? 'Lead'}</span>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <LeadPanel
+                key={selected.id}
                 lead={selected} agentEmail={agentEmail} isAdmin={isAdmin}
                 onClose={() => setSelected(null)}
                 onLeadUpdated={handleLeadUpdated}
                 onDeleteLead={handleDeleteLead}
                 onDispatch={() => openDispatch(selected)}
+                hideClose
               />
             </div>
           </div>
@@ -449,6 +532,7 @@ function BoardInner({
           }}>
             {selected && (
               <LeadPanel
+                key={selected.id}
                 lead={selected} agentEmail={agentEmail} isAdmin={isAdmin}
                 onClose={() => setSelected(null)}
                 onLeadUpdated={handleLeadUpdated}
@@ -466,6 +550,7 @@ function BoardInner({
           onClose={() => setShowCreate(false)}
           onCreated={handleLeadCreated}
           agentEmail={agentEmail}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -478,8 +563,10 @@ function BoardInner({
         />
       )}
 
-      {/* Live dot */}
-      <div style={{
+      {isMobile && !selected && <MobileTabBar onNewLead={() => setShowCreate(true)} />}
+
+      {/* Live dot (hidden while the lead panel is open so it never covers the save bar) */}
+      {!isMobile && !selected && <div style={{
         position: 'fixed', bottom: 14, right: 16, zIndex: 20,
         display: 'flex', alignItems: 'center', gap: 6,
         background: 'rgba(13,16,28,0.85)',
@@ -494,7 +581,7 @@ function BoardInner({
         }} />
         Live
         <style>{`@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}`}</style>
-      </div>
+      </div>}
     </div>
   )
 }

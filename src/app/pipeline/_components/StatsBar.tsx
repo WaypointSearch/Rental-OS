@@ -1,6 +1,11 @@
 'use client'
 
-import { Lead } from '@/types/lead'
+import {
+  AlarmClock, CalendarPlus, CheckCircle2, Eye, Flame, Handshake, Inbox, LucideIcon, Layers, UserX,
+} from 'lucide-react'
+import { ASSIGNMENT_TYPES, Lead } from '@/types/lead'
+import styles from './board.module.css'
+import { useI18n } from '@/lib/i18n'
 
 interface StatsBarProps {
   leads: Lead[]
@@ -10,34 +15,28 @@ interface StatsBarProps {
 function StatCard({
   label,
   value,
-  accent,
+  icon: Icon,
+  tone = '#8b949e',
+  highlight = false,
 }: {
   label: string
   value: string | number
-  accent?: string
+  icon: LucideIcon
+  tone?: string
+  /** Color the number too (used when the value needs attention) */
+  highlight?: boolean
 }) {
   return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.07)',
-        borderRadius: 8,
-        padding: '7px 14px',
-        minWidth: 76,
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ fontSize: 10, color: '#6e7681', marginBottom: 4, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 18, fontWeight: 600, color: accent ?? '#e6edf3', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
-        {value}
-      </div>
+    <div className={styles.stat} style={{ '--tone': tone } as React.CSSProperties}>
+      <span className={styles.statIcon} aria-hidden="true"><Icon size={15} /></span>
+      <span className={`${styles.statValue} ${highlight ? styles.toned : ''}`}>{value}</span>
+      <span className={styles.statLabel}>{label}</span>
     </div>
   )
 }
 
 export function StatsBar({ leads, isAdmin = false }: StatsBarProps) {
+  const { t } = useI18n()
   const total = leads.length
 
   const newToday = leads.filter((l) => {
@@ -74,38 +73,30 @@ export function StatsBar({ leads, isAdmin = false }: StatsBarProps) {
   const fb = leads.filter((l) => l.source?.toLowerCase().includes('facebook')).length
   const gv = total - fb
 
+  const full = leads.filter((l) => l.assignment_type === 'full').length
+  const showing = leads.filter((l) => l.assignment_type === 'showing').length
+
   return (
-    <div
-      style={{
-        background: 'rgba(13,16,28,0.85)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        padding: '8px 0.75rem',
-        display: 'flex',
-        gap: 7,
-        overflowX: 'auto',
-        flexShrink: 0,
-        alignItems: 'stretch',
-        WebkitOverflowScrolling: 'touch',
-      }}
-    >
-      <StatCard label="Total"       value={total} />
-      <StatCard label="New today"   value={newToday}  accent={newToday > 0 ? '#3fb950' : '#e6edf3'} />
-      <StatCard label="Active"      value={active}    accent="#388bfd" />
-      <StatCard label="Stale 10d+"  value={stale}     accent={stale > 0 ? '#e24b4a' : '#e6edf3'} />
-      <StatCard label="Closing"     value={highValue} accent={highValue > 0 ? '#f0883e' : '#e6edf3'} />
-      <StatCard label="Closed/mo"   value={closedMo}  accent={closedMo > 0 ? '#3fb950' : '#e6edf3'} />
+    <div className={styles.stats} role="group" aria-label="Pipeline summary">
+      <StatCard label={t('stats.total')}  value={total}     icon={Layers} />
+      <StatCard label={t('stats.newToday')}    value={newToday}  icon={CalendarPlus} tone="#3fb950" highlight={newToday > 0} />
+      <StatCard label={t('stats.active')}       value={active}    icon={Flame}        tone="#58a6ff" highlight />
+      <StatCard label={t('stats.stale')}   value={stale}     icon={AlarmClock}   tone="#f85149" highlight={stale > 0} />
+      <StatCard label={t('stats.closing')}      value={highValue} icon={Inbox}        tone="#f0883e" highlight={highValue > 0} />
+      <StatCard label={t('stats.closedMonth')} value={closedMo} icon={CheckCircle2} tone="#3fb950" highlight={closedMo > 0} />
 
       {isAdmin && unassigned > 0 && (
-        <StatCard label="Unassigned" value={unassigned} accent="#e3b341" />
+        <StatCard label={t('stats.unassigned')} value={unassigned} icon={UserX} tone="#e3b341" highlight />
       )}
 
       {isAdmin && (
         <>
-          <div style={{ width: 1, background: 'rgba(255,255,255,0.07)', margin: '3px 3px', flexShrink: 0 }} />
-          <StatCard label="FB"  value={fb} accent="#1877f2" />
-          <StatCard label="GV"  value={gv} accent="#34a853" />
+          <span className={styles.divider} aria-hidden="true" />
+          <StatCard label={t('stats.full')} value={full} icon={Handshake} tone={ASSIGNMENT_TYPES.full.color} highlight={full > 0} />
+          <StatCard label={t('stats.showing')} value={showing} icon={Eye} tone={ASSIGNMENT_TYPES.showing.color} highlight={showing > 0} />
+          <span className={styles.divider} aria-hidden="true" />
+          <StatCard label="Facebook" value={fb} icon={Inbox} tone="#1877f2" />
+          <StatCard label="Google Voice" value={gv} icon={Inbox} tone="#34a853" />
         </>
       )}
     </div>

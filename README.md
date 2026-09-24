@@ -30,6 +30,7 @@ npm run dev
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` for dev, your Vercel URL for prod |
 | `RESEND_API_KEY` | resend.com → API Keys → Create Key |
+| `OPENAI_API_KEY`, `AI_AGENT_API_KEY` | Optional. Easier: set both in **God Mode → Settings** (stored in the `app_settings` table; run `supabase-app-settings.sql` first). God Mode values win over env vars. |
 | `ADMIN_EMAIL` | Your email — receives new-lead alerts |
 | `WEBHOOK_SECRET` | Run `openssl rand -hex 32` and paste the result |
 
@@ -75,15 +76,18 @@ In Vercel Dashboard → Your Project → Settings → Environment Variables, add
 
 ---
 
-## Google Apps Script wiring
+## How leads get in
 
-Both GAS scripts (Google Voice + Facebook) already call `logToSupabase()`. Ensure each has:
+The old Google Apps Script bots are retired. Leads now come from the broker's AI
+agent (Muse, Grok, etc.), which works either:
 
-**Script Properties** (GAS → Project Settings → Script Properties):
-- `SUPABASE_URL` → your project URL
-- `SUPABASE_KEY` → your `service_role` key
+- **In the app**, signed in as the broker: New Lead → pick the source (Google Voice /
+  Facebook Marketplace / …) → fill in the details and summary → pick the agent and
+  Full lead / Showing only → Create & assign. See `public/llms.txt`.
+- **Through the API** with the key from God Mode → Settings: `POST /api/agent/leads`
+  (see `public/llms.txt`).
 
-The scripts push leads on every handoff. The Supabase webhook then emails you automatically.
+Agents can also add their own self-generated leads from the New button or My Deals.
 
 ---
 
@@ -101,27 +105,18 @@ Admin check is enforced in both the Next.js middleware (`/admin` route) and Supa
 ## How a lead flows through the system
 
 ```
-GAS bot collects criteria
+AI agent (or broker) adds the lead: New Lead form or POST /api/agent/leads
     ↓
-logToSupabase() upserts row
+Unassigned? Dispatch screen opens for the broker
     ↓
-Supabase INSERT webhook fires
+Lead assigned as Full lead or Showing only
     ↓
-/api/new-lead-notify emails admin
+Agent gets the branded assignment email (lib/notifyAssignment.ts)
+AI agent texts the agent from its own phone system
     ↓
-Admin opens pipeline → Dispatch Modal auto-opens
+Agent opens pipeline → sees their lead (phone: My Leads list)
     ↓
-Admin clicks an agent → assigned_agent updated
-    ↓
-/api/send-assignment emails agent
-    ↓
-Agent opens pipeline → sees their lead
-    ↓
-Agent edits criteria, adds notes, moves stages
-    ↓
-GAS bot sends property link to customer
-    ↓
-Customer picks MLS codes → GAS quietly updates the row
+Agent calls/texts the tenant, adds notes, moves stages
     ↓
 Lead card updates live via Supabase Realtime
 ```

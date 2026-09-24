@@ -1,6 +1,7 @@
 'use client'
 
 import { FilterState, SortKey, SourceFilter } from '@/lib/useLeadFilter'
+import { useI18n } from '@/lib/i18n'
 
 interface FilterBarProps {
   filter: FilterState
@@ -33,6 +34,7 @@ export function FilterBar({
   totalVisible,
   totalAll,
 }: FilterBarProps) {
+  const { t } = useI18n()
   return (
     <div
       style={{
@@ -63,7 +65,7 @@ export function FilterBar({
         </svg>
         <input
           type="text"
-          placeholder="Search leads…"
+          placeholder={t('filter.search')} aria-label={t('m.searchLabel')}
           value={filter.query}
           onChange={(e) => onUpdate({ query: e.target.value })}
           style={{ ...inputStyle, width: '100%', paddingLeft: 28 }}
@@ -76,7 +78,7 @@ export function FilterBar({
         onChange={(e) => onUpdate({ source: e.target.value as SourceFilter })}
         style={{ ...inputStyle, cursor: 'pointer' }}
       >
-        <option value="all"          style={{ background: '#161b22' }}>All sources</option>
+        <option value="all"          style={{ background: '#161b22' }}>{t('filter.allSources')}</option>
         <option value="facebook"     style={{ background: '#161b22' }}>Facebook</option>
         <option value="google_voice" style={{ background: '#161b22' }}>Google Voice</option>
       </select>
@@ -90,7 +92,7 @@ export function FilterBar({
         >
           {agents.map((a) => (
             <option key={a} value={a} style={{ background: '#161b22' }}>
-              {a === 'all' ? 'All agents' : a.split('@')[0]}
+              {a === 'all' ? t('filter.allAgents') : a.split('@')[0]}
             </option>
           ))}
         </select>
@@ -102,10 +104,10 @@ export function FilterBar({
         onChange={(e) => onUpdate({ sort: e.target.value as SortKey })}
         style={{ ...inputStyle, cursor: 'pointer' }}
       >
-        <option value="newest"  style={{ background: '#161b22' }}>Newest first</option>
-        <option value="oldest"  style={{ background: '#161b22' }}>Oldest first</option>
-        <option value="name"    style={{ background: '#161b22' }}>Name A–Z</option>
-        <option value="budget"  style={{ background: '#161b22' }}>Budget high–low</option>
+        <option value="newest"  style={{ background: '#161b22' }}>{t('filter.newest')}</option>
+        <option value="oldest"  style={{ background: '#161b22' }}>{t('filter.oldest')}</option>
+        <option value="name"    style={{ background: '#161b22' }}>{t('filter.name')}</option>
+        <option value="budget"  style={{ background: '#161b22' }}>{t('filter.budget')}</option>
       </select>
 
       {/* Count + clear */}
@@ -113,7 +115,7 @@ export function FilterBar({
         {isFiltered && (
           <>
             <span style={{ fontSize: 12, color: '#6e7681' }}>
-              {totalVisible} of {totalAll}
+              {t('m.ofTotal', { visible: totalVisible, total: totalAll })}
             </span>
             <button
               onClick={onReset}
@@ -128,7 +130,7 @@ export function FilterBar({
                 fontFamily: 'inherit',
               }}
             >
-              Clear
+              {t('filter.reset')}
             </button>
           </>
         )}

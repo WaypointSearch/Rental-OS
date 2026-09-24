@@ -9,6 +9,7 @@ import { exportLeadsToCSV } from '@/lib/exportCSV'
 import { getSupabase } from '@/lib/supabase'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { useRouter } from 'next/navigation'
+import { AdminSettings } from './AdminSettings'
 
 interface AdminDashboardProps {
   leads:       Lead[]
@@ -58,7 +59,7 @@ function AdminInner({ leads: initialLeads, agents: initialAgents, adminEmail, ad
   const [inviteLink,    setInviteLink]    = useState<string | null>(null)
   const [inviting,      setInviting]      = useState(false)
   const [deletingUser,  setDeletingUser]  = useState<string | null>(null)
-  const [tab,           setTab]           = useState<'overview' | 'agents' | 'leads'>('overview')
+  const [tab,           setTab]           = useState<'overview' | 'agents' | 'leads' | 'settings'>('overview')
   const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null)
   const [reassignLead,  setReassignLead]  = useState<Lead | null>(null)
 
@@ -154,6 +155,7 @@ function AdminInner({ leads: initialLeads, agents: initialAgents, adminEmail, ad
     { key: 'overview', label: 'Overview' },
     { key: 'agents',   label: `Agents (${agents.length})` },
     { key: 'leads',    label: `All Leads (${leads.length})` },
+    { key: 'settings', label: 'Settings' },
   ] as const
 
   return (
@@ -680,6 +682,14 @@ function AdminInner({ leads: initialLeads, agents: initialAgents, adminEmail, ad
                 </tbody>
               </table>
             </div>
+          </>
+        )}
+
+        {/* ── SETTINGS TAB ───────────────────────────────────────────────── */}
+        {tab === 'settings' && (
+          <>
+            <SectionTitle>Settings — AI & integrations</SectionTitle>
+            <AdminSettings />
           </>
         )}
 

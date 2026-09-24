@@ -1,10 +1,15 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Lead, STAGES, STAGE_COLORS, Note, LeadDocument } from '@/types/lead'
+import { useState, useRef, useId } from 'react'
+import { ArrowRight, MessageSquare, Phone } from 'lucide-react'
+import { ASSIGNMENT_TYPES, Lead, STAGES, STAGE_COLORS, Note, LeadDocument } from '@/types/lead'
+import { AssignmentTypeBadge } from './AssignmentTypeBadge'
 import { getSupabase } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { CityAutocomplete } from './CityAutocomplete'
+import { nextStage } from './MobileAgent'
+import { useI18n } from '@/lib/i18n'
+import { Languages } from 'lucide-react'
 
 interface LeadPanelProps {
   lead: Lead
@@ -14,6 +19,7 @@ interface LeadPanelProps {
   onLeadUpdated: (lead: Lead) => void
   onDeleteLead?: (id: string) => void
   onDispatch?: () => void  // admin opens dispatch modal
+  hideClose?: boolean      // phone view supplies its own Back button
 }
 
 // ── Hardcoded dark theme ──────────────────────────────────────────────────
@@ -32,18 +38,19 @@ const C = {
 function Pill({ label, selected, color, onClick }: {
   label: string; selected: boolean; color?: string; onClick: () => void
 }) {
+  const { option } = useI18n()
   const c = color ?? '#388bfd'
   return (
-    <button onClick={onClick} style={{
+    <button type="button" onClick={onClick} aria-pressed={selected} style={{
       background: selected ? `${c}25` : C.surface,
       border: `1px solid ${selected ? `${c}60` : C.border}`,
-      borderRadius: 8, padding: '6px 12px',
-      fontSize: 12, fontWeight: selected ? 600 : 400,
+      borderRadius: 8, padding: '8px 12px', minHeight: 36,
+      fontSize: 13, fontWeight: selected ? 600 : 400,
       color: selected ? c : C.muted,
       cursor: 'pointer', fontFamily: 'inherit',
       transition: 'all .12s', whiteSpace: 'nowrap',
     }}>
-      {label}
+      {option(label)}
     </button>
   )
 }
@@ -55,7 +62,7 @@ function PillGroup({ label, options, value, onSelect }: {
   onSelect: (v: string) => void
 }) {
   return (
-    <div style={{ marginBottom: '1rem' }}>
+    <div style={{ marginBottom: '1rem' }} role="group" aria-label={label}>
       <SectionLabel>{label}</SectionLabel>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {options.map(o => (
@@ -68,26 +75,29 @@ function PillGroup({ label, options, value, onSelect }: {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      fontSize: 10, fontWeight: 600, color: C.dim,
-      textTransform: 'uppercase', letterSpacing: '0.8px',
-      marginBottom: 8,
-    }}>
-      {children}
-    </div>
-  )
+const SECTION_LABEL_STYLE: React.CSSProperties = {
+  display: 'block',
+  fontSize: 11, fontWeight: 600, color: C.muted,
+  textTransform: 'uppercase', letterSpacing: '0.8px',
+  marginBottom: 8,
+}
+
+function SectionLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return htmlFor
+    ? <label htmlFor={htmlFor} style={SECTION_LABEL_STYLE}>{children}</label>
+    : <div style={SECTION_LABEL_STYLE}>{children}</div>
 }
 
 function EditRow({ label, value, onChange, onBlur, placeholder }: {
   label: string; value: string; onChange: (v: string) => void
   onBlur?: () => void; placeholder?: string
 }) {
+  const id = useId()
   return (
     <div style={{ marginBottom: 10 }}>
-      <SectionLabel>{label}</SectionLabel>
+      <SectionLabel htmlFor={id}>{label}</SectionLabel>
       <input
+        id={id}
         value={value}
         onChange={e => onChange(e.target.value)}
         onBlur={onBlur}
@@ -95,8 +105,9 @@ function EditRow({ label, value, onChange, onBlur, placeholder }: {
         style={{
           width: '100%', background: C.input,
           border: `1px solid ${C.border}`, color: C.text,
-          borderRadius: 7, padding: '8px 10px',
-          fontSize: 13, outline: 'none', fontFamily: 'inherit',
+          borderRadius: 8, padding: '10px 11px', minHeight: 44,
+          // 16px keeps iOS Safari from zooming in when the field is focused
+          fontSize: 16, outline: 'none', fontFamily: 'inherit',
           boxSizing: 'border-box',
         }}
       />
@@ -139,7 +150,7 @@ const CRIMINAL_OPTIONS = [
 
 // ── Main component ────────────────────────────────────────────────────────
 export function LeadPanel({
-  lead, agentEmail, isAdmin, onClose, onLeadUpdated, onDeleteLead, onDispatch,
+  lead, agentEmail, isAdmin, onClose, onLeadUpdated, onDeleteLead, onDispatch, hideClose,
 }: LeadPanelProps) {
   const supabase = getSupabase()
   const accent   = STAGE_COLORS[lead.stage] ?? '#6e7681'
@@ -167,6 +178,11 @@ export function LeadPanel({
   const [confirmDel,  setConfirmDel]  = useState(false)
   const [hasChanges,  setHasChanges]  = useState(false)
   const [uploading,   setUploading]   = useState(false)
+  const { t, lang, stage: stageName } = useI18n()
+  const [translation, setTranslation] = useState<{ summary: string | null; notes: string[] } | null>(null)
+  const [showTranslation, setShowTranslation] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translateError, setTranslateError] = useState('')
 
   async function persist(patch: Partial<Lead>) {
     const { error } = await supabase.from('leads').update(patch).eq('id', lead.id)
@@ -270,10 +286,38 @@ export function LeadPanel({
     onDeleteLead?.(lead.id)
   }
 
+  async function translateNotes() {
+    if (translation) { setShowTranslation(v => !v); return }
+    setTranslating(true)
+    setTranslateError('')
+    const texts = [lead.notes_crm ?? '', ...lead.notes.map(n => n.text)]
+    try {
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts, target: lang }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
+      setTranslation({ summary: lead.notes_crm ? data.translations[0] : null, notes: data.translations.slice(1) })
+      setShowTranslation(true)
+    } catch {
+      setTranslateError(t('lead.translateFailed'))
+    } finally {
+      setTranslating(false)
+    }
+  }
+  const canTranslate = Boolean(lead.notes_crm) || lead.notes.length > 0
+  const summaryText = showTranslation && translation?.summary ? translation.summary : lead.notes_crm
+
   const mlsCodes = (lead.mls_codes ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const urls     = (lead.urls     ?? '').split(',').map(s => s.trim()).filter(Boolean)
 
   const isUnassigned = !lead.assigned_agent || lead.assigned_agent === 'Unassigned'
+  const upcomingStage = nextStage(lead.stage)
+  const tel = phone.replace(/[^\d+]/g, '')
+  const noteId = useId()
+  const stageId = useId()
 
   return (
     <div style={{
@@ -294,7 +338,7 @@ export function LeadPanel({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Editable name */}
-            <input value={leadName}
+            <input value={leadName} aria-label={t('lead.name')} placeholder={t('lead.name')}
               onChange={e => { setLeadName(e.target.value); markDirty() }}
               style={{
                 fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: '-0.3px',
@@ -307,30 +351,27 @@ export function LeadPanel({
             />
             {/* Editable phone */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <input value={phone}
+              <input value={phone} aria-label={t('lead.phone')} placeholder={t('lead.phone')}
                 onChange={e => { setPhone(e.target.value); markDirty() }}
                 type="tel"
                 style={{
-                  fontSize: 13, color: '#388bfd', fontWeight: 600,
+                  fontSize: 16, color: '#388bfd', fontWeight: 600,
                   background: 'transparent', border: 'none', outline: 'none',
-                  padding: 0, fontFamily: 'inherit', width: 140,
+                  padding: 0, fontFamily: 'inherit', width: 170,
                   borderBottom: '1px solid transparent',
                 }}
                 onFocus={e => e.currentTarget.style.borderBottom = '1px solid rgba(56,139,253,0.4)'}
                 onBlur={e => e.currentTarget.style.borderBottom = '1px solid transparent'}
               />
-              {phone && (
-                <a href={`tel:${phone}`} style={{ fontSize: 11, color: '#388bfd', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>call</a>
-              )}
             </div>
           </div>
-          <button onClick={onClose} style={{
+          {!hideClose && <button type="button" onClick={onClose} aria-label={t('lead.close')} title={t('lead.close')} style={{
             background: 'rgba(255,255,255,0.06)',
             border: `1px solid ${C.border}`,
-            color: C.dim, width: 28, height: 28, borderRadius: 7,
+            color: C.dim, width: 36, height: 36, borderRadius: 8,
             cursor: 'pointer', fontSize: 17, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>×</button>
+          }}>×</button>}
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
@@ -339,8 +380,9 @@ export function LeadPanel({
             border: `0.5px solid ${accent}50`, borderRadius: 20,
             padding: '3px 10px', fontWeight: 600,
           }}>
-            {lead.stage}
+            {stageName(lead.stage)}
           </span>
+          {!isUnassigned && <AssignmentTypeBadge type={lead.assignment_type} long />}
           {isAdmin && lead.source && (
             <span style={{
               fontSize: 10,
@@ -353,9 +395,22 @@ export function LeadPanel({
           )}
         </div>
 
+        {/* Call / Text */}
+        {tel && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+            <a href={`tel:${tel}`} aria-label={`Call ${leadName || 'lead'}`} style={QUICK_ACTION}>
+              <Phone size={16} aria-hidden="true" /> {t('m.call')}
+            </a>
+            <a href={`sms:${tel}`} aria-label={`Text ${leadName || 'lead'}`} style={QUICK_ACTION}>
+              <MessageSquare size={16} aria-hidden="true" /> {t('m.text')}
+            </a>
+          </div>
+        )}
+
         {/* Admin: assign/reassign button */}
         {isAdmin && (
           <button
+            type="button"
             onClick={onDispatch}
             style={{
               marginTop: 10, width: '100%',
@@ -363,27 +418,79 @@ export function LeadPanel({
                 ? 'linear-gradient(135deg, #0550ae, #388bfd)'
                 : 'rgba(56,139,253,0.1)',
               border: `1px solid ${isUnassigned ? 'transparent' : 'rgba(56,139,253,0.3)'}`,
-              color: '#fff', borderRadius: 8, padding: '7px 0',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              color: '#fff', borderRadius: 8, padding: '10px 0', minHeight: 40,
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
               boxShadow: isUnassigned ? '0 2px 8px rgba(56,139,253,0.25)' : 'none',
             }}
           >
-            {isUnassigned ? '⚡ Assign to Agent' : `↺ Reassign (${(lead.assigned_agent ?? '').split('@')[0]})`}
+            {isUnassigned ? t('lead.assign') : t('lead.reassign', { agent: (lead.assigned_agent ?? '').split('@')[0] })}
           </button>
         )}
 
-        {/* Agent: read-only assigned agent */}
+        {/* Agent: read-only assigned agent + what the assignment type means */}
         {!isAdmin && (
-          <div style={{ marginTop: 8, fontSize: 12, color: C.dim }}>
-            Assigned to: <span style={{ color: C.sub, fontWeight: 500 }}>
+          <div style={{ marginTop: 10, fontSize: 13, color: C.dim }}>
+            {t('lead.assignedTo')} <span style={{ color: C.sub, fontWeight: 500 }}>
               {(lead.assigned_agent ?? 'Unassigned').split('@')[0]}
             </span>
+            {lead.assignment_type && ASSIGNMENT_TYPES[lead.assignment_type] && (
+              <div style={{
+                marginTop: 8, padding: '9px 11px', borderRadius: 9, lineHeight: 1.45,
+                color: C.sub, fontSize: 13,
+                background: `${ASSIGNMENT_TYPES[lead.assignment_type].color}14`,
+                border: `1px solid ${ASSIGNMENT_TYPES[lead.assignment_type].color}40`,
+              }}>
+                <strong style={{ color: ASSIGNMENT_TYPES[lead.assignment_type].color }}>
+                  {t(lead.assignment_type === 'full' ? 'type.full' : 'type.showing')} · {t(lead.assignment_type === 'full' ? 'type.fullPay' : 'type.showingPay')}
+                </strong>
+                <div>{t(lead.assignment_type === 'full' ? 'type.fullDetail' : 'type.showingDetail')}</div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* ── Scrollable body ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }}>
+
+        {/* ── Stage: the main thing an agent changes ── */}
+        <div style={{
+          marginBottom: '1rem', padding: 12, borderRadius: 12,
+          background: `${accent}10`, border: `1px solid ${accent}40`,
+        }}>
+          <SectionLabel htmlFor={stageId}>{t('lead.stage')}</SectionLabel>
+          <select
+            id={stageId}
+            value={lead.stage}
+            onChange={e => persist({ stage: e.target.value })}
+            style={{
+              width: '100%', background: C.input,
+              border: `1px solid ${C.border}`, color: C.text,
+              borderRadius: 8, padding: '10px 11px', minHeight: 44,
+              fontSize: 16, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+            }}
+          >
+            {STAGES.map(s => (
+              <option key={s} value={s} style={{ background: '#161b22' }}>{stageName(s)}</option>
+            ))}
+          </select>
+          {upcomingStage && (
+            <button
+              type="button"
+              onClick={() => persist({ stage: upcomingStage })}
+              aria-label={t('lead.moveTo', { stage: stageName(upcomingStage) })}
+              style={{
+                marginTop: 8, width: '100%', minHeight: 44,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                background: 'rgba(63,185,80,0.14)', border: '1px solid rgba(63,185,80,0.4)',
+                color: '#3fb950', borderRadius: 8, fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {t('lead.moveTo', { stage: stageName(upcomingStage) })} <ArrowRight size={15} aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         {/* ── AI Handoff Summary (static, non-editable) ── */}
         {lead.notes_crm && (
@@ -394,68 +501,54 @@ export function LeadPanel({
             borderRadius: 10, padding: '10px 12px',
           }}>
             <div style={{ fontSize: 10, color: '#388bfd', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-              AI Summary
+              {t('lead.aiSummary')}
             </div>
             <div style={{ fontSize: 12, color: '#8b949e', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {lead.notes_crm}
+              {summaryText}
             </div>
           </div>
         )}
 
         {/* ── Core Criteria Grid ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-          <EditRow label="Budget (monthly)" value={budget}
+          <EditRow label={t('lead.budget')} value={budget}
             onChange={v => { setBudget(v); markDirty() }} />
-          <EditRow label="Bedrooms" value={bedrooms}
+          <EditRow label={t('lead.bedrooms')} value={bedrooms}
             onChange={v => { setBedrooms(v); markDirty() }} />
-          <EditRow label="Bathrooms" value={bathrooms}
+          <EditRow label={t('lead.bathrooms')} value={bathrooms}
             onChange={v => { setBathrooms(v); markDirty() }} />
-          <EditRow label="Move-in Date" value={moveIn}
+          <EditRow label={t('lead.moveIn')} value={moveIn}
             onChange={v => { setMoveIn(v); markDirty() }} />
-          <EditRow label="Cosigner" value={cosigner}
+          <EditRow label={t('lead.cosigner')} value={cosigner}
             onChange={v => { setCosigner(v); markDirty() }} />
         </div>
 
         {/* ── Credit quick-select ── */}
-        <PillGroup label="Credit" options={CREDIT_OPTIONS}
+        <PillGroup label={t('lead.credit')} options={CREDIT_OPTIONS}
           value={credit} onSelect={v => selectPill('credit', v)} />
 
         {/* ── Pets quick-select ── */}
-        <PillGroup label="Pets" options={PET_OPTIONS}
+        <PillGroup label={t('lead.pets')} options={PET_OPTIONS}
           value={pets} onSelect={v => selectPill('pets', v)} />
 
         {/* ── Income quick-select ── */}
-        <PillGroup label="Income Proof" options={INCOME_OPTIONS}
+        <PillGroup label={t('lead.income')} options={INCOME_OPTIONS}
           value={income} onSelect={v => selectPill('income', v)} />
 
         {/* ── Criminal/Eviction quick-select ── */}
-        <PillGroup label="Criminal / Eviction" options={CRIMINAL_OPTIONS}
+        <PillGroup label={t('lead.criminal')} options={CRIMINAL_OPTIONS}
           value={criminal} onSelect={v => selectPill('criminal_eviction_status', v)} />
 
         {/* ── Target Cities (below pills so dropdown doesn't cover them) ── */}
         <div style={{ marginBottom: '1rem' }}>
-          <SectionLabel>Target Cities</SectionLabel>
+          <SectionLabel>{t('lead.cities')}</SectionLabel>
           <CityAutocomplete value={cities} onChange={updateCities} />
         </div>
-
-        {/* ── SAVE CHANGES BUTTON ── */}
-        <button onClick={saveAllChanges} disabled={saving || (!hasChanges && !saved)} style={{
-          width: '100%', marginBottom: '1rem',
-          background: saved ? '#3fb950' : hasChanges ? 'linear-gradient(135deg, #0550ae, #388bfd)' : 'rgba(56,139,253,0.15)',
-          color: '#fff', border: 'none', borderRadius: 8,
-          padding: '10px 0', fontSize: 13, fontWeight: 600,
-          cursor: saving || !hasChanges ? (saved ? 'default' : 'not-allowed') : 'pointer',
-          fontFamily: 'inherit',
-          boxShadow: hasChanges ? '0 4px 16px rgba(56,139,253,0.25)' : 'none',
-          transition: 'all .2s',
-        }}>
-          {saving ? 'Saving...' : saved ? 'Saved' : hasChanges ? 'Save Changes' : 'No Changes'}
-        </button>
 
         {/* ── MLS Picks ── */}
         {mlsCodes.length > 0 && (
           <div style={{ marginBottom: '1rem' }}>
-            <SectionLabel>MLS Picks</SectionLabel>
+            <SectionLabel>{t('lead.mlsPicks')}</SectionLabel>
             {mlsCodes.map((code, i) => (
               <div key={code} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -477,7 +570,7 @@ export function LeadPanel({
 
         {/* ── Documents ── */}
         <div style={{ marginBottom: '1rem' }}>
-          <SectionLabel>Documents</SectionLabel>
+          <SectionLabel>{t('lead.documents')}</SectionLabel>
           {documents.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
               {documents.map((doc, i) => (
@@ -494,29 +587,43 @@ export function LeadPanel({
                     {doc.name}
                   </a>
                   <span style={{ fontSize: 10, color: C.dim, flexShrink: 0 }}>{doc.uploaded_by}</span>
-                  <button onClick={() => removeDoc(i)} style={{
+                  <button type="button" onClick={() => { if (window.confirm(t('lead.removeDoc', { name: doc.name }))) removeDoc(i) }} aria-label={`Remove document ${doc.name}`} title="Remove document" style={{
                     background: 'none', border: 'none', color: 'rgba(226,75,74,0.5)',
-                    cursor: 'pointer', fontSize: 14, padding: '0 4px', fontFamily: 'inherit', flexShrink: 0,
-                  }}>x</button>
+                    cursor: 'pointer', fontSize: 16, padding: '4px 8px', fontFamily: 'inherit', flexShrink: 0,
+                  }}>×</button>
                 </div>
               ))}
             </div>
           )}
-          <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{
+          <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={handleFileUpload} aria-label="Upload a document for this lead" />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{
             width: '100%',
             background: uploading ? 'rgba(56,139,253,0.15)' : C.surface,
             border: `1px dashed ${C.border}`,
             color: uploading ? '#388bfd' : C.muted,
-            borderRadius: 8, padding: '10px 0',
-            fontSize: 12, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            borderRadius: 8, padding: '12px 0', minHeight: 44,
+            fontSize: 14, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
           }}>
-            {uploading ? 'Uploading...' : '+ Upload Document'}
+            {uploading ? t('lead.uploading') : t('lead.upload')}
           </button>
         </div>
 
         {/* ── Agent Notes ── */}
-        <SectionLabel>Agent Notes</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <SectionLabel htmlFor={noteId}>{t('lead.notes')}</SectionLabel>
+          {canTranslate && (
+            <button type="button" onClick={translateNotes} disabled={translating} style={{
+              marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: 'rgba(163,113,247,0.1)', border: '1px solid rgba(163,113,247,0.3)',
+              color: '#b392f0', borderRadius: 7, padding: '5px 9px', fontSize: 12, fontWeight: 600,
+              cursor: translating ? 'wait' : 'pointer', fontFamily: 'inherit',
+            }}>
+              <Languages size={13} aria-hidden="true" />
+              {translating ? t('lead.translating') : showTranslation ? t('lead.showOriginal') : t('lead.translate')}
+            </button>
+          )}
+        </div>
+        {translateError && <div role="status" style={{ fontSize: 12, color: '#e3b341', marginBottom: 8 }}>{translateError}</div>}
         {lead.notes.length > 0 && (
           <div style={{ marginBottom: '0.75rem' }}>
             {lead.notes.map((note, i) => (
@@ -528,54 +635,38 @@ export function LeadPanel({
                 <div style={{ fontSize: 11, color: C.dim, marginBottom: 3 }}>
                   {note.ts} · {note.by}
                 </div>
-                <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>{note.text}</div>
+                <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                  {showTranslation && translation?.notes[i] ? translation.notes[i] : note.text}
+                </div>
               </div>
             ))}
           </div>
         )}
 
         <textarea
+          id={noteId}
           value={noteText}
           onChange={e => setNoteText(e.target.value)}
-          
-          rows={2}
+          placeholder={t('lead.notePlaceholder')}
+          rows={3}
           style={{
             width: '100%', background: C.input,
             border: `1px solid ${C.border}`, color: C.text,
-            borderRadius: 8, padding: '9px 11px',
-            fontSize: 13, resize: 'none', outline: 'none',
+            borderRadius: 8, padding: '10px 11px',
+            fontSize: 16, resize: 'vertical', outline: 'none',
             fontFamily: 'inherit', boxSizing: 'border-box',
           }}
         />
-        <button onClick={saveNote} disabled={savingNote || !noteText.trim()} style={{
-          marginTop: 7, width: '100%',
+        <button type="button" onClick={saveNote} disabled={savingNote || !noteText.trim()} style={{
+          marginTop: 7, width: '100%', minHeight: 44,
           background: savingNote || !noteText.trim() ? 'rgba(56,139,253,0.2)' : 'rgba(56,139,253,0.85)',
           color: '#fff', border: 'none', borderRadius: 8,
           padding: '9px 0', fontSize: 13, fontWeight: 600,
           cursor: savingNote || !noteText.trim() ? 'not-allowed' : 'pointer',
           fontFamily: 'inherit',
         }}>
-          {savingNote ? 'Saving...' : 'Save Note'}
+          {savingNote ? t('lead.saving') : t('lead.saveNote')}
         </button>
-
-        {/* ── Move Stage ── */}
-        <div style={{ marginTop: '1.1rem', marginBottom: '1rem' }}>
-          <SectionLabel>Move Stage</SectionLabel>
-          <select
-            value={lead.stage}
-            onChange={e => persist({ stage: e.target.value })}
-            style={{
-              width: '100%', background: C.input,
-              border: `1px solid ${C.border}`, color: C.text,
-              borderRadius: 8, padding: '9px 11px',
-              fontSize: 13, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-            }}
-          >
-            {STAGES.map(s => (
-              <option key={s} value={s} style={{ background: '#161b22' }}>{s}</option>
-            ))}
-          </select>
-        </div>
 
         {/* ── Admin: Reassign + Delete ── */}
         {isAdmin && (
@@ -588,7 +679,7 @@ export function LeadPanel({
               color: '#a371f7', borderRadius: 8, padding: '9px 0',
               fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
             }}>
-              Reassign Lead
+              {t('lead.reassignBtn')}
             </button>
 
             {/* Delete button */}
@@ -600,7 +691,7 @@ export function LeadPanel({
                 color: C.danger, borderRadius: 8, padding: '8px 0',
                 fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                Delete Lead
+                {t('lead.delete')}
               </button>
             ) : (
               <div style={{
@@ -609,7 +700,7 @@ export function LeadPanel({
                 borderRadius: 8, padding: '12px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: 12, color: C.danger, marginBottom: 10 }}>
-                  Permanently delete this lead?
+                  {t('lead.deleteConfirm')}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setConfirmDel(false)} style={{
@@ -617,13 +708,13 @@ export function LeadPanel({
                     border: `1px solid ${C.border}`, color: C.muted,
                     borderRadius: 7, padding: '7px 0', fontSize: 12,
                     cursor: 'pointer', fontFamily: 'inherit',
-                  }}>Cancel</button>
+                  }}>{t('lead.cancel')}</button>
                   <button onClick={handleDeleteLead} style={{
                     flex: 1, background: 'rgba(226,75,74,0.8)',
                     border: 'none', color: '#fff', borderRadius: 7,
                     padding: '7px 0', fontSize: 12, fontWeight: 700,
                     cursor: 'pointer', fontFamily: 'inherit',
-                  }}>Delete</button>
+                  }}>{t('lead.deleteYes')}</button>
                 </div>
               </div>
             )}
@@ -632,6 +723,36 @@ export function LeadPanel({
 
         <div style={{ height: '1.5rem' }} />
       </div>
+
+      {/* ── Save bar: appears only when lead details were edited ── */}
+      {(hasChanges || saved) && (
+        <div role="region" aria-label={t('lead.unsaved')} style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 18px calc(10px + env(safe-area-inset-bottom))',
+          borderTop: `1px solid ${C.border}`, background: 'rgba(10,13,20,0.98)',
+        }}>
+          <span style={{ flex: 1, fontSize: 13, color: saved ? '#3fb950' : C.sub }}>
+            {saved ? t('lead.allSaved') : t('lead.unsaved')}
+          </span>
+          {!saved && (
+            <button type="button" onClick={saveAllChanges} disabled={saving} style={{
+              minHeight: 44, padding: '0 22px',
+              background: 'linear-gradient(135deg, #0550ae, #388bfd)',
+              color: '#fff', border: 'none', borderRadius: 8,
+              fontSize: 14, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit',
+            }}>
+              {saving ? t('lead.saving') : t('lead.saveChanges')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
+}
+
+const QUICK_ACTION: React.CSSProperties = {
+  minHeight: 44, borderRadius: 8,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+  background: 'rgba(56,139,253,0.12)', border: '1px solid rgba(56,139,253,0.3)',
+  color: '#58a6ff', fontSize: 14, fontWeight: 700, textDecoration: 'none',
 }
