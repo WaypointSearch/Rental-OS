@@ -27,17 +27,7 @@ window.WAYPOINT_FORM_ENDPOINT = window.WAYPOINT_FORM_ENDPOINT || "";
     });
   }
 
-  function postedLabel(posted) {
-    var days = typeof posted === "number" ? posted : Math.round((Date.now() - new Date(posted).getTime()) / 864e5);
-    if (!isFinite(days) || days <= 0) return "Posted today";
-    if (days === 1) return "Posted yesterday";
-    if (days < 7) return "Posted " + days + " days ago";
-    var weeks = Math.round(days / 7);
-    if (weeks < 5) return "Posted " + weeks + (weeks === 1 ? " week ago" : " weeks ago");
-    return "Posted " + Math.round(days / 30) + "+ months ago";
-  }
-
-  /* Job card markup shared by the home page and the jobs board. */
+  /* Role-profile card markup shared by the home page and the jobs board. */
   function renderJobCard(job, opts) {
     opts = opts || {};
     var disciplines = window.WAYPOINT_DISCIPLINES || {};
@@ -48,18 +38,18 @@ window.WAYPOINT_FORM_ENDPOINT = window.WAYPOINT_FORM_ENDPOINT || "";
       : "";
     return (
       '<article class="job-card" style="--sys:' + esc(d.color) + '">' +
-        '<div class="job-head"><span class="job-tag">' + esc(d.label) + '</span><span class="job-posted">' + postedLabel(job.posted) + "</span></div>" +
+        '<div class="job-head"><span class="job-tag">' + esc(d.label) + '</span><span class="job-posted">Role profile</span></div>' +
         '<h3><a href="' + applyHref + '" data-apply="' + esc(job.id) + '">' + esc(job.title) + "</a></h3>" +
         '<div class="job-meta">' +
           "<span>" + ICONS.pin + esc(job.location) + "</span>" +
           "<span>" + ICONS.brief + esc(job.type) + "</span>" +
           "<span>" + ICONS.home + esc(job.workplace) + "</span>" +
-          '<span class="job-salary">' + esc(job.salary) + "</span>" +
         "</div>" +
+        '<p class="job-salary">' + esc(job.salary) + "</p>" +
         (opts.showSummary ? '<p class="job-summary">' + esc(job.summary) + "</p>" : "") +
         tags +
-        '<div class="job-foot"><span class="job-client">' + esc(job.client) + " · " + esc(job.market) + "</span>" +
-          '<a class="btn btn-sm btn-outline" href="' + applyHref + '" data-apply="' + esc(job.id) + '">Apply now ' + ICONS.arrow + "</a></div>" +
+        '<div class="job-foot"><span class="job-client"><strong>Typical employer:</strong> ' + esc(job.employer) + "</span>" +
+          '<a class="btn btn-sm btn-outline" href="' + applyHref + '" data-apply="' + esc(job.id) + '">Get matched ' + ICONS.arrow + "</a></div>" +
       "</article>"
     );
   }

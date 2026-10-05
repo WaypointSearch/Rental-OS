@@ -53,9 +53,9 @@
 
   /* Position dropdown on the application form */
   if (position) {
-    position.innerHTML = '<option value="General application">General application — any suitable role</option>' +
+    position.innerHTML = '<option value="General application">Open to any suitable role</option>' +
       jobs.map(function (job) {
-        return '<option value="' + W.esc(job.id) + '">' + W.esc(job.title + " — " + job.location + " (" + job.id + ")") + "</option>";
+        return '<option value="' + W.esc(job.id) + '">' + W.esc(job.title) + "</option>";
       }).join("");
   }
 
@@ -76,18 +76,15 @@
 
   function matches(job, state) {
     var label = (disciplines[job.discipline] || {}).label || "";
-    var haystack = [job.title, job.summary, job.market, job.client, label, (job.tags || []).join(" ")].join(" ").toLowerCase();
+    var haystack = [job.title, job.summary, job.market, job.employer, label, (job.tags || []).join(" ")].join(" ").toLowerCase();
     if (state.q && state.q.split(/\s+/).some(function (word) { return haystack.indexOf(word) === -1; })) return false;
     if (state.location && job.location.toLowerCase().indexOf(state.location) === -1 &&
+        job.location.toLowerCase().indexOf("nationwide") === -1 &&
         !(state.location === "remote" && job.workplace === "Remote")) return false;
     if (state.discipline.length && state.discipline.indexOf(job.discipline) === -1) return false;
     if (state.type.length && state.type.indexOf(job.type) === -1) return false;
     if (state.workplace.length && state.workplace.indexOf(job.workplace) === -1) return false;
     return true;
-  }
-
-  function daysAgo(job) {
-    return typeof job.posted === "number" ? job.posted : (Date.now() - new Date(job.posted).getTime()) / 864e5;
   }
 
   function render() {
@@ -99,14 +96,15 @@
       workplace: checked("workplace")
     };
     var results = jobs.filter(function (job) { return matches(job, state); });
+    var order = Object.keys(disciplines);
     results.sort(sort.value === "salary"
       ? function (a, b) { return (b.salaryMin || 0) - (a.salaryMin || 0); }
-      : function (a, b) { return daysAgo(a) - daysAgo(b); });
+      : function (a, b) { return order.indexOf(a.discipline) - order.indexOf(b.discipline); });
 
-    count.textContent = results.length === 1 ? "1 role" : results.length + " roles";
+    count.textContent = results.length === 1 ? "1 role profile" : results.length + " role profiles";
     list.innerHTML = results.length
       ? results.map(function (job) { return W.renderJobCard(job, { showSummary: true, showTags: true }); }).join("")
-      : '<div class="no-results"><h3>No roles match those filters — yet.</h3><p>Many of our searches are confidential and never posted. Send us your resume and we\'ll match you to roles as they open.</p><p style="margin-top:20px"><a class="btn btn-primary" href="#apply">Submit your resume</a></p></div>';
+      : '<div class="no-results"><h3>No profiles match those filters.</h3><p>Most of our searches are confidential and never posted. Send us your resume and a recruiter in your discipline will match you to live searches.</p><p style="margin-top:20px"><a class="btn btn-primary" href="#apply">Submit your resume</a></p></div>';
 
     var next = new URLSearchParams();
     if (state.q) next.set("q", keyword.value.trim());

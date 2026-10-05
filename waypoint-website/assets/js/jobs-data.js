@@ -1,13 +1,23 @@
 /* ==========================================================================
-   SAMPLE LISTINGS — replace these with real openings before launch,
-   or swap this file for a feed from your ATS (Bullhorn, Loxo, JobAdder…).
+   REPRESENTATIVE ROLE PROFILES — not live job postings.
+
+   These describe the kinds of roles Waypoint recruits for, so the site
+   looks active without publishing real clients or real openings.
+   Candidates who click "Get matched" land on the resume form with the
+   profile preselected.
+
+   Before launch, sanity-check the "typical base" ranges against your own
+   placement data. If you later want to publish live jobs, add them here
+   (or swap this file for an ATS feed) using the same fields.
 
    Field reference
    - discipline: one of the keys in WAYPOINT_DISCIPLINES below
-   - type:       "Direct Hire" | "Contract" | "Contract-to-Hire" | "Executive Search"
-   - workplace:  "On-site" | "Hybrid" | "Remote"
-   - posted:     number of days ago, or an ISO date string ("2026-10-01")
-   - salaryMin:  annual USD figure used for sorting (hourly roles: rate × 2080)
+   - type:       typical engagement: "Direct Hire" | "Contract" |
+                 "Contract-to-Hire" | "Executive Search"
+   - workplace:  typical arrangement: "On-site" | "Hybrid" | "Remote"
+   - location:   where demand is strongest (region, not a specific office)
+   - employer:   type of employer that typically hires this role
+   - salaryMin:  annual USD used for sorting (hourly roles: rate × 2080)
    ========================================================================== */
 
 window.WAYPOINT_DISCIPLINES = {
@@ -23,213 +33,227 @@ window.WAYPOINT_DISCIPLINES = {
 
 window.WAYPOINT_JOBS = [
   {
-    id: "WS-1042",
+    id: "RP-M01",
     title: "Senior Mechanical Engineer, PE",
     discipline: "mechanical",
-    market: "Healthcare",
-    client: "National MEP engineering firm",
-    location: "Dallas, TX",
+    market: "Healthcare · Commercial · Higher Ed",
+    employer: "MEP consulting engineering firms",
+    location: "Nationwide",
     workplace: "Hybrid",
     type: "Direct Hire",
-    salary: "$135k – $160k",
-    salaryMin: 135000,
-    posted: 1,
-    summary: "Lead HVAC design for hospital expansions and medical office buildings from schematic design through construction administration.",
-    tags: ["PE required", "Revit", "Healthcare"]
+    salary: "$130k – $165k typical base",
+    salaryMin: 130000,
+    summary: "Leads HVAC design from schematic design through construction administration, mentors junior engineers and owns client relationships on complex projects.",
+    tags: ["PE", "Revit", "Load calcs", "Central plants"]
   },
   {
-    id: "WS-1039",
-    title: "Electrical Project Engineer — Critical Power",
+    id: "RP-E01",
+    title: "Electrical Engineer — Critical Power",
     discipline: "electrical",
-    market: "Data Centers",
-    client: "Mission-critical design-build contractor",
-    location: "Ashburn, VA",
+    market: "Data Centers · Mission Critical",
+    employer: "Design-build and MEP engineering firms",
+    location: "Mid-Atlantic · Texas · Southwest",
     workplace: "On-site",
     type: "Direct Hire",
-    salary: "$115k – $140k",
+    salary: "$115k – $150k typical base",
     salaryMin: 115000,
-    posted: 2,
-    summary: "Own medium-voltage distribution, UPS and generator scopes for hyperscale data center campuses.",
-    tags: ["MV / UPS", "Data centers", "EIT or PE"]
+    summary: "Designs medium-voltage distribution, UPS, generator and switchgear systems for data centers and other facilities that cannot go dark.",
+    tags: ["EIT / PE", "MV distribution", "UPS", "Arc flash"]
   },
   {
-    id: "WS-1037",
+    id: "RP-C01",
     title: "MEP Project Manager",
     discipline: "construction",
-    market: "Data Centers",
-    client: "ENR Top 100 general contractor",
-    location: "Phoenix, AZ",
+    market: "Data Centers · Healthcare · Industrial",
+    employer: "General contractors and MEP subcontractors",
+    location: "Sun Belt · Nationwide",
     workplace: "On-site",
     type: "Direct Hire",
-    salary: "$155k – $190k + bonus",
-    salaryMin: 155000,
-    posted: 3,
-    summary: "Manage MEP trade partners, coordination and commissioning on a multi-phase data center program.",
-    tags: ["Mission critical", "Trade management", "PMP preferred"]
+    salary: "$150k – $190k typical base + bonus",
+    salaryMin: 150000,
+    summary: "Manages MEP trade partners, coordination, schedule and commissioning on large, multi-phase building programs.",
+    tags: ["MEP coordination", "Trade management", "PMP a plus"]
   },
   {
-    id: "WS-1035",
-    title: "Fire Protection Designer (NICET III)",
+    id: "RP-P01",
+    title: "Fire Protection Designer",
     discipline: "plumbing",
-    market: "Life Sciences",
-    client: "Regional fire protection engineering firm",
-    location: "Boston, MA",
+    market: "Life Sciences · Commercial · Healthcare",
+    employer: "Fire protection engineers and contractors",
+    location: "Northeast · Southeast · Texas",
     workplace: "Hybrid",
     type: "Direct Hire",
-    salary: "$90k – $110k",
-    salaryMin: 90000,
-    posted: 4,
-    summary: "Design wet, dry and pre-action sprinkler systems for laboratory and cleanroom facilities.",
-    tags: ["NICET III", "AutoSPRINK", "Labs"]
+    salary: "$85k – $115k typical base",
+    salaryMin: 85000,
+    summary: "Designs wet, dry and pre-action sprinkler systems, performs hydraulic calculations and coordinates with architects and AHJs.",
+    tags: ["NICET III / IV", "AutoSPRINK", "Hydraulic calcs"]
   },
   {
-    id: "WS-1033",
+    id: "RP-X01",
     title: "Commissioning Agent (CxA)",
     discipline: "commissioning",
-    market: "Data Centers",
-    client: "Independent commissioning authority",
-    location: "Atlanta, GA",
+    market: "Data Centers · Healthcare · Labs",
+    employer: "Independent commissioning authorities",
+    location: "Nationwide (travel)",
     workplace: "On-site",
     type: "Contract",
-    salary: "$75 – $95 / hr",
-    salaryMin: 156000,
-    posted: 5,
-    summary: "Lead Level 3–5 functional testing and integrated systems testing for critical power and cooling.",
-    tags: ["IST", "12-month contract", "Travel 25%"]
+    salary: "$70 – $100 / hr typical",
+    salaryMin: 145600,
+    summary: "Leads functional performance testing and integrated systems testing for critical power, cooling and building automation.",
+    tags: ["CxA / CCP", "IST", "Level 3–5 testing"]
   },
   {
-    id: "WS-1031",
+    id: "RP-B01",
     title: "BIM Coordinator — MEP",
     discipline: "bim",
-    market: "Commercial",
-    client: "Mechanical contractor",
-    location: "Denver, CO",
+    market: "Commercial · Healthcare · Mission Critical",
+    employer: "Mechanical and electrical contractors",
+    location: "Nationwide",
     workplace: "Hybrid",
     type: "Contract-to-Hire",
-    salary: "$45 – $60 / hr",
-    salaryMin: 93600,
-    posted: 6,
-    summary: "Run clash detection and trade coordination in Navisworks for mid- and high-rise commercial projects.",
-    tags: ["Navisworks", "Revit MEP", "Coordination"]
+    salary: "$40 – $60 / hr typical",
+    salaryMin: 83200,
+    summary: "Runs clash detection and trade coordination, produces fabrication-ready models and supports field installation.",
+    tags: ["Navisworks", "Revit MEP", "Fabrication"]
   },
   {
-    id: "WS-1028",
+    id: "RP-A01",
     title: "Project Architect",
     discipline: "architecture",
-    market: "Higher Education",
-    client: "Award-winning architecture studio",
-    location: "Chicago, IL",
+    market: "Higher Ed · Healthcare · Civic",
+    employer: "Architecture and A/E firms",
+    location: "Nationwide",
     workplace: "Hybrid",
     type: "Direct Hire",
-    salary: "$100k – $125k",
-    salaryMin: 100000,
-    posted: 7,
-    summary: "Lead technical delivery of academic and research buildings with a collaborative, design-led studio.",
-    tags: ["Licensed architect", "Revit", "Higher ed"]
+    salary: "$95k – $130k typical base",
+    salaryMin: 95000,
+    summary: "Leads technical delivery of construction documents, coordinates consultants and guides projects through construction.",
+    tags: ["Licensed architect", "Revit", "CA experience"]
   },
   {
-    id: "WS-1026",
-    title: "Structural Engineer, SE",
+    id: "RP-S01",
+    title: "Structural Engineer, PE / SE",
     discipline: "structural",
-    market: "Commercial",
-    client: "Structural engineering consultancy",
-    location: "Seattle, WA",
+    market: "Commercial · Mixed-Use · Industrial",
+    employer: "Structural engineering consultancies",
+    location: "West Coast · Southeast · Texas",
     workplace: "Hybrid",
     type: "Direct Hire",
-    salary: "$125k – $155k",
-    salaryMin: 125000,
-    posted: 8,
-    summary: "Design steel, concrete and mass-timber structures for commercial and mixed-use developments.",
-    tags: ["SE license", "Mass timber", "Seismic"]
+    salary: "$110k – $155k typical base",
+    salaryMin: 110000,
+    summary: "Designs steel, concrete and mass-timber structures and manages project delivery from concept through construction.",
+    tags: ["PE / SE", "RAM / ETABS", "Seismic"]
   },
   {
-    id: "WS-1024",
+    id: "RP-M02",
     title: "Director of MEP Engineering",
     discipline: "mechanical",
-    market: "Commercial",
-    client: "Multidisciplinary A/E firm",
-    location: "New York, NY",
+    market: "Multi-market",
+    employer: "Multidisciplinary A/E firms",
+    location: "Major metros nationwide",
     workplace: "Hybrid",
     type: "Executive Search",
-    salary: "$225k – $265k + bonus",
-    salaryMin: 225000,
-    posted: 9,
-    summary: "Lead a 40-person MEP group, own P&L, and grow the firm's healthcare and science practices.",
-    tags: ["Leadership", "P&L", "PE required"]
+    salary: "$200k – $275k typical base + bonus",
+    salaryMin: 200000,
+    summary: "Leads an MEP department or office: owns P&L, grows key markets, recruits and develops the team.",
+    tags: ["Leadership", "P&L", "Business development"]
   },
   {
-    id: "WS-1022",
+    id: "RP-C02",
     title: "Mechanical Superintendent",
     discipline: "construction",
-    market: "Industrial",
-    client: "Industrial mechanical contractor",
-    location: "Houston, TX",
+    market: "Industrial · Healthcare · Commercial",
+    employer: "Mechanical contractors",
+    location: "Texas · Southeast · Midwest",
     workplace: "On-site",
     type: "Direct Hire",
-    salary: "$120k – $145k + truck",
-    salaryMin: 120000,
-    posted: 10,
-    summary: "Run field operations for process piping and HVAC installation on a large manufacturing facility.",
-    tags: ["Process piping", "OSHA 30", "Field leadership"]
+    salary: "$110k – $150k typical base",
+    salaryMin: 110000,
+    summary: "Runs field operations for HVAC and piping installation, manages crews and subcontractors, and owns safety and schedule.",
+    tags: ["OSHA 30", "Process piping", "Field leadership"]
   },
   {
-    id: "WS-1019",
+    id: "RP-X02",
     title: "Controls Engineer — BAS",
     discipline: "commissioning",
-    market: "Healthcare",
-    client: "Building automation integrator",
-    location: "Charlotte, NC",
+    market: "Healthcare · Higher Ed · Commercial",
+    employer: "Building automation integrators",
+    location: "Nationwide",
     workplace: "On-site",
     type: "Direct Hire",
-    salary: "$95k – $120k",
-    salaryMin: 95000,
-    posted: 12,
-    summary: "Design and program building automation systems for hospitals and healthcare campuses.",
-    tags: ["Niagara", "Sequences", "Healthcare"]
+    salary: "$90k – $125k typical base",
+    salaryMin: 90000,
+    summary: "Designs and programs building automation systems, writes sequences of operation and supports startup and commissioning.",
+    tags: ["Niagara", "Sequences", "BACnet"]
   },
   {
-    id: "WS-1017",
-    title: "Senior Electrical Engineer — Power Distribution",
+    id: "RP-E02",
+    title: "Electrical Designer",
     discipline: "electrical",
-    market: "Healthcare",
-    client: "National MEP engineering firm",
-    location: "Nashville, TN",
+    market: "Commercial · Hospitality · Multifamily",
+    employer: "MEP consulting engineering firms",
+    location: "Nationwide",
     workplace: "Hybrid",
     type: "Direct Hire",
-    salary: "$130k – $155k",
-    salaryMin: 130000,
-    posted: 13,
-    summary: "Design essential electrical systems, emergency power and lighting for acute-care facilities.",
-    tags: ["PE required", "NFPA 99", "Healthcare"]
+    salary: "$75k – $105k typical base",
+    salaryMin: 75000,
+    summary: "Produces power, lighting and systems drawings in Revit, performs load calculations and supports engineers through CA.",
+    tags: ["Revit", "Lighting", "Panel schedules"]
   },
   {
-    id: "WS-1014",
+    id: "RP-P02",
     title: "Plumbing Engineer",
     discipline: "plumbing",
-    market: "Commercial",
-    client: "MEP engineering firm",
-    location: "Remote — US",
+    market: "Multifamily · Hospitality · Healthcare",
+    employer: "MEP consulting engineering firms",
+    location: "Remote-friendly · US",
     workplace: "Remote",
     type: "Direct Hire",
-    salary: "$100k – $125k",
-    salaryMin: 100000,
-    posted: 15,
-    summary: "Design domestic water, sanitary, storm and natural gas systems for multifamily and hospitality projects.",
-    tags: ["CPD a plus", "Revit", "Remote"]
+    salary: "$95k – $130k typical base",
+    salaryMin: 95000,
+    summary: "Designs domestic water, sanitary, storm, gas and medical gas systems and coordinates with mechanical and fire protection.",
+    tags: ["CPD a plus", "Revit", "Med gas"]
   },
   {
-    id: "WS-1011",
+    id: "RP-C03",
     title: "Electrical Estimator",
-    discipline: "electrical",
-    market: "Commercial",
-    client: "Electrical contractor",
-    location: "Orlando, FL",
+    discipline: "construction",
+    market: "Commercial · Education · Industrial",
+    employer: "Electrical contractors",
+    location: "Southeast · Texas · Mid-Atlantic",
     workplace: "On-site",
     type: "Direct Hire",
-    salary: "$95k – $120k",
-    salaryMin: 95000,
-    posted: 18,
-    summary: "Prepare hard-bid and negotiated estimates for commercial, hospitality and education projects.",
-    tags: ["Accubid", "Preconstruction", "Commercial"]
+    salary: "$90k – $125k typical base",
+    salaryMin: 90000,
+    summary: "Builds hard-bid and negotiated estimates, analyzes drawings and specifications and supports preconstruction pursuits.",
+    tags: ["Accubid / McCormick", "Takeoff", "Preconstruction"]
+  },
+  {
+    id: "RP-A02",
+    title: "Interior Designer",
+    discipline: "architecture",
+    market: "Workplace · Healthcare · Hospitality",
+    employer: "Architecture and interiors firms",
+    location: "Major metros nationwide",
+    workplace: "Hybrid",
+    type: "Direct Hire",
+    salary: "$70k – $105k typical base",
+    salaryMin: 70000,
+    summary: "Develops interior concepts through documentation, selects finishes and FF&E, and presents to clients.",
+    tags: ["NCIDQ a plus", "Revit", "FF&E"]
+  },
+  {
+    id: "RP-B02",
+    title: "VDC Manager",
+    discipline: "bim",
+    market: "Mission Critical · Healthcare · Commercial",
+    employer: "General contractors",
+    location: "Nationwide",
+    workplace: "Hybrid",
+    type: "Direct Hire",
+    salary: "$120k – $160k typical base",
+    salaryMin: 120000,
+    summary: "Leads virtual design and construction strategy across projects: coordination, model standards, laser scanning and field tools.",
+    tags: ["Navisworks", "BIM 360 / ACC", "Team leadership"]
   }
 ];
