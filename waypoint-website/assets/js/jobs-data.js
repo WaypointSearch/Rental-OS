@@ -12,12 +12,11 @@
 
    Field reference
    - discipline: one of the keys in WAYPOINT_DISCIPLINES below
-   - type:       typical engagement: "Direct Hire" | "Contract" |
-                 "Contract-to-Hire" | "Executive Search"
+   - type:       typical engagement: "Direct Hire" | "Executive Search"
    - workplace:  typical arrangement: "On-site" | "Hybrid" | "Remote"
    - location:   where demand is strongest (region, not a specific office)
    - employer:   type of employer that typically hires this role
-   - salaryMin:  annual USD used for sorting (hourly roles: rate × 2080)
+   - salaryMin:  annual USD used for sorting
    ========================================================================== */
 
 window.WAYPOINT_DISCIPLINES = {
@@ -96,9 +95,9 @@ window.WAYPOINT_JOBS = [
     employer: "Independent commissioning authorities",
     location: "Nationwide (travel)",
     workplace: "On-site",
-    type: "Contract",
-    salary: "$70 – $100 / hr typical",
-    salaryMin: 145600,
+    type: "Direct Hire",
+    salary: "$95k – $135k typical base",
+    salaryMin: 95000,
     summary: "Leads functional performance testing and integrated systems testing for critical power, cooling and building automation.",
     tags: ["CxA / CCP", "IST", "Level 3–5 testing"]
   },
@@ -110,9 +109,9 @@ window.WAYPOINT_JOBS = [
     employer: "Mechanical and electrical contractors",
     location: "Nationwide",
     workplace: "Hybrid",
-    type: "Contract-to-Hire",
-    salary: "$40 – $60 / hr typical",
-    salaryMin: 83200,
+    type: "Direct Hire",
+    salary: "$70k – $95k typical base",
+    salaryMin: 70000,
     summary: "Runs clash detection and trade coordination, produces fabrication-ready models and supports field installation.",
     tags: ["Navisworks", "Revit MEP", "Fabrication"]
   },

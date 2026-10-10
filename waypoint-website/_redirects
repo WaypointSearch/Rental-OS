@@ -1,0 +1,27 @@
+# Old waypointsearch.com URLs -> new pages (Cloudflare Pages / Netlify format)
+/news               /insights   301
+/news/*             /insights   301
+/blog               /insights   301
+/blog/*             /insights   301
+/resources          /insights   301
+/resources/*        /insights   301
+/home               /           301
+/about-us           /about      301
+/about-us/          /about      301
+/our-team           /about      301
+/team               /about      301
+/contact-us         /contact    301
+/contact-us/        /contact    301
+/clients            /employers  301
+/clients/*          /employers  301
+/hire               /employers  301
+/hire-talent        /employers  301
+/services           /employers  301
+/services/*         /employers  301
+/candidates         /jobs       301
+/candidates/*       /jobs       301
+/job-seekers        /jobs       301
+/job-board          /jobs       301
+/open-positions     /jobs       301
+/submit-resume      /jobs#apply 301
+/privacy-policy     /privacy    301

@@ -1,11 +1,6 @@
 /* ==========================================================================
-   Waypoint Search — shared site behaviour
+   Waypoint Search Group — shared site behaviour
    ========================================================================== */
-
-/* Forms: set this to your form endpoint (Formspree, HubSpot, your ATS…).
-   While it is empty, forms validate and show the success message without
-   sending anything — handy for previewing, not for launch. */
-window.WAYPOINT_FORM_ENDPOINT = window.WAYPOINT_FORM_ENDPOINT || "";
 
 (function () {
   "use strict";
@@ -32,7 +27,7 @@ window.WAYPOINT_FORM_ENDPOINT = window.WAYPOINT_FORM_ENDPOINT || "";
     opts = opts || {};
     var disciplines = window.WAYPOINT_DISCIPLINES || {};
     var d = disciplines[job.discipline] || { label: job.discipline, color: "#f26a21" };
-    var applyHref = "jobs.html?apply=" + encodeURIComponent(job.id) + "#apply";
+    var applyHref = "/jobs?apply=" + encodeURIComponent(job.id) + "#apply";
     var tags = opts.showTags && job.tags
       ? '<div class="job-tags">' + job.tags.map(function (t) { return '<span class="chip">' + esc(t) + "</span>"; }).join("") + "</div>"
       : "";
@@ -192,42 +187,48 @@ window.WAYPOINT_FORM_ENDPOINT = window.WAYPOINT_FORM_ENDPOINT || "";
     }
   });
 
-  /* ---------- Forms ---------- */
+  /* ---------- Forms ----------
+     Forms post straight to their action (FormSubmit), which emails the
+     submission and redirects to /thanks. We validate first and point the
+     redirect at whichever domain the site is running on. */
   document.querySelectorAll("form[data-form]").forEach(function (form) {
     form.addEventListener("submit", function (e) {
-      e.preventDefault();
       if (!form.checkValidity()) {
+        e.preventDefault();
         form.reportValidity();
         return;
       }
-      var button = form.querySelector('[type="submit"]');
-      var endpoint = window.WAYPOINT_FORM_ENDPOINT;
-      function done() {
-        form.classList.add("is-sent");
-        var success = form.querySelector(".form-success");
-        if (success) {
-          success.setAttribute("tabindex", "-1");
-          success.focus();
-        }
+      var next = form.querySelector('input[name="_next"]');
+      if (next && /^https?:$/.test(window.location.protocol)) {
+        next.value = window.location.origin + "/thanks?form=" + encodeURIComponent(form.getAttribute("data-form"));
       }
-      if (!endpoint) {
-        done();
+      if (!form.getAttribute("action")) {
+        e.preventDefault();
+        form.classList.add("is-sent");
         return;
       }
-      if (button) button.disabled = true;
-      var data = new FormData(form);
-      data.append("form", form.getAttribute("data-form"));
-      fetch(endpoint, { method: "POST", body: data, headers: { Accept: "application/json" } })
-        .then(function (res) {
-          if (!res.ok) throw new Error("Request failed");
-          done();
-        })
-        .catch(function () {
-          if (button) button.disabled = false;
-          alert("Sorry — something went wrong sending your message. Please email us directly.");
-        });
+      var button = form.querySelector('[type="submit"]');
+      if (button) {
+        setTimeout(function () {
+          button.disabled = true;
+          button.textContent = "Sending…";
+        }, 0);
+      }
     });
   });
+
+  /* ---------- Thank-you page ---------- */
+  var thanks = document.querySelector("[data-thanks]");
+  if (thanks) {
+    var kind = params.get("form");
+    thanks.querySelectorAll("[data-thanks-for]").forEach(function (el) {
+      el.hidden = el.getAttribute("data-thanks-for") !== kind;
+    });
+    if (!thanks.querySelector("[data-thanks-for]:not([hidden])")) {
+      var fallback = thanks.querySelector('[data-thanks-for="contact"]');
+      if (fallback) fallback.hidden = false;
+    }
+  }
 
   /* ---------- Sectors page: highlight the active anchor ---------- */
   var anchorLinks = document.querySelectorAll(".anchor-bar a");

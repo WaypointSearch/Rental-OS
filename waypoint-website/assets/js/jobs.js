@@ -42,7 +42,7 @@
   }).join("");
 
   var tCount = tally("type");
-  typeBox.innerHTML = ["Direct Hire", "Contract", "Contract-to-Hire", "Executive Search"].map(function (t) {
+  typeBox.innerHTML = ["Direct Hire", "Executive Search"].map(function (t) {
     return checkbox("type", t, t, tCount[t] || 0);
   }).join("");
 
@@ -55,7 +55,7 @@
   if (position) {
     position.innerHTML = '<option value="General application">Open to any suitable role</option>' +
       jobs.map(function (job) {
-        return '<option value="' + W.esc(job.id) + '">' + W.esc(job.title) + "</option>";
+        return '<option value="' + W.esc(job.title) + '" data-id="' + W.esc(job.id) + '">' + W.esc(job.title) + "</option>";
       }).join("");
   }
 
@@ -68,7 +68,11 @@
       input.checked = values.indexOf(input.value) !== -1;
     });
   });
-  if (position && params.get("apply")) position.value = params.get("apply");
+  function selectProfile(id) {
+    var option = position && position.querySelector('option[data-id="' + id + '"]');
+    if (option) position.value = option.value;
+  }
+  if (params.get("apply")) selectProfile(params.get("apply"));
 
   function checked(name) {
     return Array.prototype.map.call(document.querySelectorAll('input[name="' + name + '"]:checked'), function (i) { return i.value; });
@@ -137,7 +141,7 @@
     var link = e.target.closest("[data-apply]");
     if (!link || !position) return;
     e.preventDefault();
-    position.value = link.getAttribute("data-apply");
+    selectProfile(link.getAttribute("data-apply"));
     document.getElementById("apply").scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(function () { document.getElementById("first-name").focus({ preventScroll: true }); }, 500);
   });

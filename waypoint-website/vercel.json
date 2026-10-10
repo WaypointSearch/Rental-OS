@@ -1,0 +1,11 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/news/:path*", "destination": "/insights", "permanent": true },
+    { "source": "/about-us", "destination": "/about", "permanent": true },
+    { "source": "/contact-us", "destination": "/contact", "permanent": true },
+    { "source": "/candidates/:path*", "destination": "/jobs", "permanent": true },
+    { "source": "/clients/:path*", "destination": "/employers", "permanent": true }
+  ]
+}
