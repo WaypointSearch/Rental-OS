@@ -54,7 +54,8 @@ async function init() {
   $('#o-parking').value = o.parking || '';
 
   $('#page-title').textContent = isNew ? 'New by-owner listing' : 'Ad Editor';
-  $('#page-sub').textContent = isNew ? 'Not on the MLS? Enter it here.' : `${original.source === 'manual' ? 'By-owner' : 'MLS# ' + original.mlsNumber} · ${original.fullAddress || original.city || ''}`;
+  const code = !isNew && settings.refCode.enabled ? SOR.refCode(original.mlsNumber, settings) : '';
+  $('#page-sub').textContent = isNew ? 'Not on the MLS? Enter it here.' : `${original.source === 'manual' ? 'By-owner' : 'MLS# ' + original.mlsNumber}${code ? ' · Caller code ' + code : ''} · ${original.fullAddress || original.city || ''}`;
   $('#source-badge').textContent = original.source === 'manual' ? 'By owner' : 'From MLS';
   $('#source-badge').className = 'badge ' + (original.source === 'manual' ? 'sun' : '');
 
@@ -148,7 +149,7 @@ function renderAdBadge() {
 }
 
 function finalBody() {
-  return SOR.composeBody($('#ad-body').value, SOR.getAgent(settings), settings);
+  return SOR.composeBody($('#ad-body').value, SOR.getAgent(settings), settings, original.mlsNumber);
 }
 
 function renderPreview() {

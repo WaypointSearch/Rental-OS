@@ -9,7 +9,7 @@
 
   const SOR = root.SOR = root.SOR || {};
 
-  SOR.VERSION = '4.2.0';
+  SOR.VERSION = '4.3.0';
   SOR.TITLE_MAX = 70;        // Craigslist PostingTitle maxlength (UTF-16 units, emoji count as 2+)
   SOR.MAX_PHOTOS = 24;       // Craigslist housing image limit
   SOR.SETTINGS_KEY = 'sor_settings';
@@ -81,6 +81,9 @@
       nextButton: true,             // big fixed "Next step" button on every Craigslist page
       requeueAfter48h: false,       // put listings back in the queue 48h after they were posted
       dailyLimit: 0,                // max Craigslist posts per day (0 = no limit)
+      // Reference code: the MLS number with an extra digit slipped in (F3256961 → F32506961) so callers
+      // can quote it without other agents recognising it as an MLS number.
+      refCode: { enabled: true, digit: '0', afterDigit: 3, bold: true },
     };
   };
 
@@ -89,6 +92,9 @@
     const src = stored && typeof stored === 'object' ? stored : {};
     const s = Object.assign({}, d, src);
     s.ai = Object.assign({}, d.ai, src.ai || {});
+    s.refCode = Object.assign({}, d.refCode, src.refCode || {});
+    s.refCode.digit = /^\d$/.test(String(s.refCode.digit)) ? String(s.refCode.digit) : '0';
+    s.refCode.afterDigit = Math.min(9, Math.max(1, Math.floor(Number(s.refCode.afterDigit) || 3)));
     s.agents = (Array.isArray(src.agents) ? src.agents : d.agents)
       .filter(a => a && a.id)
       .map(a => ({ id: String(a.id), name: str(a.name), title: str(a.title), phone: str(a.phone), email: str(a.email) }));
@@ -202,28 +208,71 @@
     return out.join(' ');
   }
 
+  // Every municipality (plus common MLS postal cities) in Broward, Miami-Dade and Palm Beach.
   const COUNTY_CITIES = {
-    broward: ['fort lauderdale', 'ft lauderdale', 'hollywood', 'pembroke pines', 'miramar', 'davie', 'plantation',
-      'sunrise', 'coral springs', 'pompano beach', 'deerfield beach', 'margate', 'coconut creek', 'tamarac',
-      'lauderhill', 'lauderdale lakes', 'north lauderdale', 'oakland park', 'wilton manors', 'hallandale beach',
-      'hallandale', 'dania beach', 'cooper city', 'weston', 'parkland', 'southwest ranches', 'lighthouse point',
-      'lauderdale by the sea', 'west park', 'pembroke park'],
-    'miami-dade': ['miami', 'miami beach', 'hialeah', 'miami gardens', 'north miami', 'north miami beach', 'homestead',
-      'doral', 'kendall', 'cutler bay', 'aventura', 'coral gables', 'miami lakes', 'opa-locka', 'opa locka',
-      'sunny isles beach', 'palmetto bay', 'pinecrest', 'sweetwater', 'florida city', 'hialeah gardens',
-      'miami springs', 'south miami', 'key biscayne', 'surfside', 'bal harbour', 'north bay village'],
-    'palm beach': ['west palm beach', 'boca raton', 'boynton beach', 'delray beach', 'lake worth', 'lake worth beach',
-      'wellington', 'jupiter', 'palm beach gardens', 'royal palm beach', 'greenacres', 'riviera beach', 'lantana',
-      'palm springs', 'belle glade', 'loxahatchee', 'north palm beach', 'palm beach', 'tequesta', 'juno beach'],
+    broward: ['Coconut Creek', 'Cooper City', 'Coral Springs', 'Dania Beach', 'Davie', 'Deerfield Beach', 'Fort Lauderdale',
+      'Hallandale Beach', 'Hallandale', 'Hillsboro Beach', 'Hollywood', 'Lauderdale-By-The-Sea', 'Lauderdale Lakes', 'Lauderhill',
+      'Lazy Lake', 'Lighthouse Point', 'Margate', 'Miramar', 'North Lauderdale', 'Oakland Park', 'Parkland', 'Pembroke Park',
+      'Pembroke Pines', 'Plantation', 'Pompano Beach', 'Sea Ranch Lakes', 'Southwest Ranches', 'Sunrise', 'Tamarac', 'West Park',
+      'Weston', 'Wilton Manors', 'Broadview Park', 'Dania'],
+    'miami-dade': ['Aventura', 'Bal Harbour', 'Bay Harbor Islands', 'Biscayne Park', 'Coral Gables', 'Cutler Bay', 'Doral',
+      'El Portal', 'Florida City', 'Golden Beach', 'Hialeah', 'Hialeah Gardens', 'Homestead', 'Indian Creek', 'Key Biscayne',
+      'Medley', 'Miami', 'Miami Beach', 'Miami Gardens', 'Miami Lakes', 'Miami Shores', 'Miami Springs', 'North Bay Village',
+      'North Miami', 'North Miami Beach', 'Opa-locka', 'Palmetto Bay', 'Pinecrest', 'South Miami', 'Sunny Isles Beach', 'Surfside',
+      'Sweetwater', 'Virginia Gardens', 'West Miami', 'Kendall', 'Kendall West', 'The Hammocks', 'Tamiami', 'Westchester',
+      'Fontainebleau', 'Olympia Heights', 'Country Club', 'Richmond West', 'Princeton', 'Naranja', 'Leisure City', 'Redland',
+      'Miami Dade', 'Unincorporated Dade County'],
+    'palm beach': ['Atlantis', 'Belle Glade', 'Boca Raton', 'Boynton Beach', 'Briny Breezes', 'Cloud Lake', 'Delray Beach',
+      'Glen Ridge', 'Golf', 'Greenacres', 'Gulf Stream', 'Haverhill', 'Highland Beach', 'Hypoluxo', 'Juno Beach', 'Jupiter',
+      'Jupiter Inlet Colony', 'Lake Clarke Shores', 'Lake Park', 'Lake Worth', 'Lake Worth Beach', 'Lantana', 'Loxahatchee',
+      'Loxahatchee Groves', 'Manalapan', 'Mangonia Park', 'North Palm Beach', 'Ocean Ridge', 'Pahokee', 'Palm Beach',
+      'Palm Beach Gardens', 'Palm Beach Shores', 'Palm Springs', 'Riviera Beach', 'Royal Palm Beach', 'South Bay',
+      'South Palm Beach', 'Tequesta', 'Wellington', 'West Palm Beach', 'Westlake'],
+    '': ['Port St Lucie', 'Port Saint Lucie', 'Fort Pierce', 'Stuart', 'Jensen Beach', 'Palm City', 'Hobe Sound', 'Okeechobee',
+      'Vero Beach', 'Sebastian', 'Naples', 'Fort Myers', 'Cape Coral', 'Key West', 'Key Largo', 'Marathon', 'Islamorada'],
   };
+  const normCity = (v) => lower(v).replace(/\./g, '').replace(/-/g, ' ').replace(/\bft\b/g, 'fort').replace(/\bst\b/g, 'saint').replace(/\s+/g, ' ').trim();
+  const CITY_INDEX = new Map(); // normalized → [display name, county]
+  Object.entries(COUNTY_CITIES).forEach(([county, list]) => list.forEach(c => { if (!CITY_INDEX.has(normCity(c))) CITY_INDEX.set(normCity(c), [c, county]); }));
+  const CITY_KEYS = Array.from(CITY_INDEX.keys()).sort((a, b) => b.length - a.length);
+  const STREETISH = /\d|#|\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|ter|terr|terrace|way|pl|place|cir|circle|hwy|highway|pkwy|parkway|trl|trail|unit|apt|ste|suite|bldg)\b/i;
+
+  // OneHome sometimes hands back "123 SW 4th Ave Hollywood" (no comma) — keep only the city.
+  SOR.cleanCity = function (raw) {
+    const s = str(raw).replace(/\s+/g, ' ').replace(/,?\s+(fl|florida)\.?(\s+\d{5}(-\d{4})?)?\s*$/i, '').replace(/[,\s]+$/, '');
+    if (!s) return '';
+    const n = normCity(s);
+    if (CITY_INDEX.has(n)) return CITY_INDEX.get(n)[0];
+    const hit = CITY_KEYS.find(c => n.endsWith(' ' + c) || n.endsWith(',' + c));
+    if (hit) return CITY_INDEX.get(hit)[0];
+    if (s.includes(',')) {
+      const last = s.split(',').map(x => x.trim()).filter(Boolean).pop();
+      if (last && !STREETISH.test(last)) return niceCase(last);
+    }
+    if (!STREETISH.test(s)) return niceCase(s);
+    const m = s.match(/^.*\b(?:st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|ter|terrace|way|pl|place|cir|circle|hwy|highway|pkwy|parkway|trl|trail)\b\.?\s+(?:(?:unit|apt|ste|suite|#)\s*\S+\s+)?([A-Za-z][A-Za-z .'-]+)$/i);
+    if (m && !STREETISH.test(m[1])) return niceCase(m[1]);
+    return '';
+  };
+
+  // Street part of an address once the city is known ("123 SW 4th Ave Hollywood" → "123 SW 4th Ave").
+  SOR.cleanStreet = function (street, city) {
+    let s = str(street).replace(/\s+/g, ' ').replace(/,?\s+(fl|florida)\.?(\s+\d{5}(-\d{4})?)?\s*$/i, '');
+    if (city) {
+      const words = normCity(city).split(' ').map(w =>
+        w === 'saint' ? '(?:st|saint)\\.?' : w === 'fort' ? '(?:ft|fort)\\.?' : w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      s = s.replace(new RegExp('(^|[,\\s]+)' + words.join('[\\s.\\-]+') + '\\s*$', 'i'), '');
+    }
+    return s.replace(/[,\s]+$/, '');
+  };
+
   function countyFor(countyText, city) {
     const c = lower(countyText);
     if (/broward/.test(c)) return 'broward';
     if (/dade|miami/.test(c)) return 'miami-dade';
     if (/palm beach/.test(c)) return 'palm beach';
-    const ct = lower(city);
-    for (const [county, cities] of Object.entries(COUNTY_CITIES)) if (cities.includes(ct)) return county;
-    return '';
+    const hit = CITY_INDEX.get(normCity(city));
+    return hit ? hit[1] : '';
   }
   SOR.countyFor = countyFor;
 
@@ -270,10 +319,10 @@
     f.sqft = toNum(l.sqft);
     if (f.sqft !== null && f.sqft < 150) f.sqft = null;
     f.rent = toNum(l.price);
-    f.city = niceCase(l.city);
+    f.city = SOR.cleanCity(l.city) || SOR.cleanCity((str(l.fullAddress).split(',').slice(-2, -1)[0]) || '');
     f.state = (str(l.state) || 'FL').toUpperCase();
     f.zip = (str(l.zip).match(/\d{5}/) || [''])[0];
-    f.street = str(l.streetAddress);
+    f.street = SOR.cleanStreet(l.streetAddress, f.city);
     const sub = niceCase(l.subdivision);
     f.subdivision = /^(n\/?a|none|unknown|not applicable|0|no)$/i.test(sub) ? '' : sub;
     f.county = countyFor(l.county || detail(map, /county/), f.city);
@@ -568,19 +617,64 @@
     return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   };
 
-  SOR.composeBody = function (body, agent, settings) {
+  // ── Reference code ─────────────────────────────────────────
+  SOR.refCode = function (mls, settings) {
+    const s = SOR.mergeSettings(settings);
+    const id = str(mls).toUpperCase().replace(/\s+/g, '');
+    if (!id) return '';
+    if (/^OWN-/.test(id)) return 'R' + id.slice(4, 10); // by-owner listings: short internal id
+    let seen = 0;
+    for (let i = 0; i < id.length; i++) {
+      if (/\d/.test(id[i]) && ++seen === s.refCode.afterDigit) return id.slice(0, i + 1) + s.refCode.digit + id.slice(i + 1);
+    }
+    return id + s.refCode.digit;
+  };
+
+  // Caller's code → real MLS number (drops the inserted digit).
+  SOR.decodeRefCode = function (code, settings) {
+    const s = SOR.mergeSettings(settings);
+    const c = str(code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!c) return '';
+    let seen = 0;
+    for (let i = 0; i < c.length; i++) {
+      if (/\d/.test(c[i]) && ++seen === s.refCode.afterDigit) {
+        return c[i + 1] === s.refCode.digit ? c.slice(0, i + 1) + c.slice(i + 2) : c;
+      }
+    }
+    return c.endsWith(s.refCode.digit) ? c.slice(0, -1) : c;
+  };
+
+  const LINE_LABELS = /^[ \t]*(?:[\p{Extended_Pictographic}\uFE0F★✔◆•*-]\s*)?(?:hook(?: line)?|headline|opening(?: line)?|intro|title|body|description|call to action|cta)\s*:\s*/gimu;
+  const EMAILS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+
+  SOR.composeBody = function (body, agent, settings, mls) {
     const s = SOR.mergeSettings(settings);
     const a = agent || SOR.getAgent(s);
     const ic = ICONS[s.titleStyle] || ICONS.emoji;
     const phone = SOR.formatPhone(a.phone);
     const first = str(a.name).split(/\s+/)[0] || 'us';
-    const parts = [str(body)];
-    if (phone) parts.push(J(ic.phone, `Call or text ${first} at ${phone} to schedule a showing today!`));
+    const code = s.refCode.enabled ? SOR.refCode(mls, s) : '';
+    const bold = (t) => (s.refCode.bold ? `<b>${t}</b>` : t);
+    const key = s.titleStyle === 'emoji' ? '🔑 ' : s.titleStyle === 'symbols' ? '★ ' : '';
+    const codeLine = code ? `${key}${bold(`Please refer to code ${code} when texting or calling about this listing`)}${key ? ' ' + key.trim() : ''}` : '';
+
+    // Ad text: no "Hook:" style labels, never an email address (Craigslist blocks ads that show one).
+    const paras = str(body).replace(LINE_LABELS, '').split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    if (codeLine && paras.length) {
+      paras.splice(1, 0, codeLine);                                   // near the top
+      if (paras.length >= 5) paras.splice(Math.ceil(paras.length / 2) + 1, 0, codeLine); // middle
+    }
+    const parts = [paras.join('\n\n')];
+    if (phone) {
+      parts.push(J(ic.phone, code
+        ? `Call or text ${first} at ${phone} — ${bold(`mention code ${code}`)} so we know which home you're asking about!`
+        : `Call or text ${first} at ${phone} to schedule a showing today!`));
+    }
     if (s.includeKeywords && str(s.keywords)) parts.push(s.titleStyle === 'plain' ? SOR.stripEmoji(s.keywords) : str(s.keywords));
     const rule = s.titleStyle === 'plain' ? '------------------------------' : '━━━━━━━━━━━━━━━━━━━━';
-    parts.push([rule, `${a.name}${a.title ? ', ' + a.title : ''}`, s.brokerage, phone && `Call or Text: ${phone}`, a.email]
+    parts.push([rule, `${a.name}${a.title ? ', ' + a.title : ''}`, s.brokerage, phone && `Call or Text: ${phone}`]
       .filter(Boolean).join('\n'));
-    return parts.filter(Boolean).join('\n\n');
+    return parts.filter(Boolean).join('\n\n').replace(EMAILS, '').replace(/[ \t]+\n/g, '\n');
   };
 
   // ════════════════════════════════════════════════════════════
@@ -643,7 +737,8 @@
       '- Use ONLY the facts provided. Never invent amenities, sizes, prices, specials, or move-in dates.',
       `- Titles: maximum ${SOR.TITLE_MAX} characters each (emoji count as 2). Lead with the strongest verified selling point (e.g. NO HOA, private pool, garage, fenced yard, renovated, waterfront). Include beds/baths shorthand like 3/2 and the city. Make all 5 titles clearly different from each other. One word in caps at most.`,
       `- ${styleRule}`,
-      '- Body: plain text only (no HTML, no markdown, no asterisks or #). Short punchy lines. Sections: a hook line, quick facts (location, beds/baths, size, rent), a HIGHLIGHTS list, and an ABOUT THIS HOME paragraph rewritten from the MLS remarks in a warm, confident voice. 120–250 words.',
+      '- Body: plain text only (no HTML, no markdown, no asterisks or #). Short punchy lines. Order: an attention-grabbing opening sentence, quick facts (location, beds/baths, size, rent), a HIGHLIGHTS list, and an ABOUT THIS HOME paragraph rewritten from the MLS remarks in a warm, confident voice. 120–250 words.',
+      '- Never prefix lines with labels such as "Hook:", "Headline:", "Intro:", "Title:", "Body:" or "Description:". Section headers (e.g. HIGHLIGHTS) are fine.',
       '- Do NOT include phone numbers, emails, links, agent names, brokerage names or MLS numbers — contact info is appended automatically.',
       '- Weave in natural search phrases renters type on Craigslist (city name, "house for rent", "pool home", "pet friendly" only if pets are allowed, etc.). No keyword lists.',
       '- Fair Housing: describe the property, never the people. No references to race, color, religion, national origin, sex, disability, familial status, age, or source of income (avoid "perfect for families", "ideal for singles", "no kids", "adults only", "walking distance to church").',
@@ -658,6 +753,7 @@
       .filter(t => t.length >= 10));
     let body = str(raw && raw.body)
       .replace(EMAIL_RE, '').replace(URL_RE, '').replace(PHONE_RE, '')
+      .replace(LINE_LABELS, '')
       .replace(/\*\*|__|^#+\s*/gm, '')
       .replace(/<[^>]+>/g, '')
       .replace(/\n{3,}/g, '\n\n').trim();
@@ -683,7 +779,7 @@
     const add = (o) => P.push(Object.assign({ kind: 'text', source: 'listing' }, o));
     const always = s.alwaysPetsAndAC;
     const phone = SOR.formatPhone(a.phone);
-    const body = SOR.composeBody(theAd.body, a, s);
+    const body = SOR.composeBody(theAd.body, a, s, l && l.mlsNumber);
 
     add({ key: 'title', label: 'Posting title', names: ['PostingTitle', 'posting_title'], labels: ['posting title'], value: theAd.title, display: `${theAd.title.length}/${SOR.TITLE_MAX}` });
     add({ key: 'price', label: 'Rent', names: ['price', 'Ask', 'rent'], labels: ['price', 'monthly rent', 'rent amount'], value: f.rent ? String(Math.round(f.rent)) : '', display: SOR.money(f.rent) });

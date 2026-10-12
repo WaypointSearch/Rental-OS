@@ -56,10 +56,11 @@ what that page needs:
 
 | Page | NEXT STEP does |
 |---|---|
+| re-use previous data | clicks **re-use selected data** (photos unticked; the ad details are replaced later anyway) |
 | type / category / area | picks housing offered → apartments / housing for rent → the listing's county |
 | ad details | fills everything, verifies no required field is empty (re-fills if one is), then clicks Continue |
 | map | Continue |
-| images | adds the listing's photos, waits for uploads to finish, clicks "done with images" |
+| images | deletes any photos carried over from the previous ad, adds this listing's photos, waits for uploads, clicks "done with images" |
 | preview | publishes and marks the listing posted |
 | posted | starts the next posting for the next listing in the queue |
 
@@ -91,7 +92,7 @@ patterns can get ads ghosted or the account blocked. Keep volume reasonable.
 | Cats OK, dogs OK, air conditioning | **Always checked** |
 | Rent period / available on | monthly / today |
 | Show phone, calls OK, texts OK, phone, contact name | Selected agent |
-| Description | Hook line, quick facts, highlights, cleaned-up MLS remarks (listing-agent phone numbers, showing instructions and compensation removed), call-to-action for the selected agent, the "we have more" keyword block, signature |
+| Description | Hook line, quick facts, highlights, cleaned-up MLS remarks (listing-agent phone numbers, showing instructions and compensation removed), the reference code (3×), call-to-action for the selected agent, the "we have more" keyword block, signature. Never contains an email address (Craigslist blocks those ads) |
 
 After filling, the panel lists every field: ✓ filled, • default used, ! needs you. It also
 outlines in red any required field Craigslist still shows as empty, and repeats any Craigslist
@@ -99,6 +100,16 @@ error messages, so you don't have to hunt for what failed.
 
 Fields are found by name first, then by their visible label, then by their option list, so the
 filler keeps working if Craigslist renames its form fields.
+
+## Reference code
+
+Every description says **"🔑 Please refer to code F32506961 when texting or calling about this listing"**
+three times (top, middle, and in the call-to-action), in bold. The code is the MLS number with an extra
+digit slipped in: by default a **0 after the 3rd digit** (F3256961 → F32506961), so other agents don't
+recognise it as an MLS number. When someone calls, type their code into the popup's
+**Caller's code** box. It shows the listing, its real MLS number, and a link back to OneHome. The
+digit, its position and the bold styling are in Settings. If Craigslist ever shows `<b>` as text,
+the preview step warns you to turn bold off.
 
 ## Settings
 

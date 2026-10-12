@@ -60,6 +60,20 @@
     </section>
 
     <section class="card">
+      <h2>Reference code in every ad</h2>
+      <p class="small muted lead">Adds “Please refer to code … when texting or calling about this listing” three times to each description. The code is the MLS number with an extra digit slipped in, so callers can quote it but other agents won't recognise it as an MLS number. Type a caller's code into the popup's <b>Caller's code</b> box to get the real listing back.</p>
+      <div class="rows">
+        <label class="f inline"><input id="rc-enabled" type="checkbox"> <span>Add the reference code to descriptions</span></label>
+        <label class="f inline"><input id="rc-bold" type="checkbox"> <span>Make the code lines <b>bold</b> (Craigslist renders basic HTML; the preview step warns if it doesn't)</span></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Extra digit<select id="rc-digit"></select></label>
+        <label class="f">Insert it after this many digits<input id="rc-after" type="number" min="1" max="9" step="1"></label>
+      </div>
+      <div id="rc-example" class="note" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
       <h2><span class="grow">“We have more” keyword block</span><button id="btn-reset-keywords" class="btn small" type="button">Reset to default</button></h2>
       <p class="small muted lead">Added under every description so renters searching for <i>pet friendly</i>, <i>pool home</i>, <i>fast approval</i>, <i>no HOA</i>, or your cities find your ads, even when this property isn't the match. Keep it to real inventory you can show. Write it as sentences, not a long keyword list: Craigslist ghosts ads that look like keyword spam.</p>
       <label class="f inline" style="margin-bottom:8px"><input id="s-includeKeywords" type="checkbox"> <span>Include this block in every ad</span></label>

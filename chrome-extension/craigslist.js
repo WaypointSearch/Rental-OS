@@ -173,6 +173,7 @@
     if (s === 'editimage' || (fileInput && /add images|upload images|done with images|images of a maximum|drag and drop images/.test(bodyText))) return 'images';
     if (s === 'geoverify' || (/geoverify/.test(location.href))) return 'map';
     if (s === 'preview' || (/this is an unpublished draft|publish/.test(bodyText) && document.querySelector('.postingtitletext, #titletextonly, .posting-title'))) return 'preview';
+    if (/re-?use (selected )?data|from your previous post/.test(bodyText) && reuseButton()) return 'reuse';
     const opts = radioOptions();
     if (opts.length) {
       const all = opts.map(o => o.text).join(' | ');
@@ -189,7 +190,7 @@
   // Panel
   // ════════════════════════════════════════════════════════════
   const MODE_LABEL = {
-    edit: 'Ad details', images: 'Photos', map: 'Map', preview: 'Preview', done: 'Posted',
+    reuse: 'Step: re-use data', edit: 'Ad details', images: 'Photos', map: 'Map', preview: 'Preview', done: 'Posted',
     'choose-type': 'Step: type', 'choose-category': 'Step: category', 'choose-area': 'Step: area',
     'choose-other': 'Step: choose', setup: 'Ready',
   };
@@ -267,6 +268,8 @@
   function renderStep(l) {
     const f = SOR.analyze(l, state.settings);
     switch (state.mode) {
+      case 'reuse':
+        return `${btn('reuse', 'Re-use selected data')}<div class="sor-hint">Contact info carries over; the ad details are replaced on the next pages and old photos are removed.</div>`;
       case 'choose-type':
         return `${btn('pick-type', 'Choose “housing offered”')}<div class="sor-hint">Craigslist posting type.</div>`;
       case 'choose-category':
@@ -286,6 +289,8 @@
       case 'images': {
         const n = Math.min(l.photoCount || 0, SOR.MAX_PHOTOS);
         if (!n) return '<div class="sor-hint">This listing has no saved photos. Add photos in the ad editor.</div>';
+        const old = carriedOverImages().length;
+        if (old && !state.photosAdded) return `${btn('clear-old', `Remove ${old} old photo${old === 1 ? '' : 's'} first`)}<div class="sor-hint">These came from the previous ad.</div>`;
         return state.photosAdded
           ? `${btn('done-images', 'Done with images →')}<div class="sor-hint">Wait for every thumbnail to finish uploading first.</div>`
           : `${btn('photos', `Add ${n} photo${n === 1 ? '' : 's'}`)}${(l.photoCount || 0) > SOR.MAX_PHOTOS ? `<div class="sor-hint">Craigslist allows ${SOR.MAX_PHOTOS}; the first ${SOR.MAX_PHOTOS} are used.</div>` : ''}`;
@@ -312,7 +317,7 @@
 
   // ── Fixed NEXT STEP button (same screen spot on every page, for a click macro) ──
   const NEXT_LABEL = {
-    'choose-type': 'choose “housing offered”', 'choose-category': 'choose “apartments / housing for rent”',
+    reuse: 're-use selected data', 'choose-type': 'choose “housing offered”', 'choose-category': 'choose “apartments / housing for rent”',
     'choose-area': 'choose the county', 'choose-other': 'choose the area', edit: 'fill, verify & continue',
     map: 'continue past the map', images: 'add photos & finish', preview: 'publish', done: 'start the next listing',
     setup: 'start the next listing',
@@ -337,11 +342,13 @@
     const shown = text(document.querySelector('#titletextonly, .postingtitletext, .posting-title, h1, h2'));
     const sent = (l.posted && l.posted.clTitle) || '';
     const lostEmoji = sent && /\p{Extended_Pictographic}/u.test(sent) && shown && !/\p{Extended_Pictographic}/u.test(shown);
+    const rawTags = /<\/?b>/i.test(text(document.querySelector('#postingbody, .postingbody, [class*="posting-body"], section, body')));
     return `
       <div class="sor-check">
         <div>✓ Check the title, rent and photos below.</div>
         <div>✓ Phone shows as ${esc(SOR.formatPhone(SOR.getAgent(state.settings).phone))}.</div>
         ${lostEmoji ? '<div class="sor-warn">⚠ Craigslist removed the emoji from your title. Switch “Title style” to Symbols (★) in Settings.</div>' : ''}
+        ${rawTags ? '<div class="sor-warn">⚠ Craigslist is showing &lt;b&gt; tags as text. Turn off “Bold” for the reference code in Settings.</div>' : ''}
         <div>Then click <b>publish</b>.</div>
       </div>`;
   }
@@ -430,6 +437,7 @@
         case 'edit': if (l) chrome.runtime.sendMessage({ action: 'OPEN_EDITOR', mlsNumber: l.mlsNumber }); break;
         case 'next-title': state.customTitle = null; state.titleIdx += 1; render(); break;
         case 'ai': await runAi(l); break;
+        case 'reuse': if (!await reuseStep()) halt('Couldn’t find the re-use button.'); break;
         case 'pick-type': await pickRadio(['housing offered']); break;
         case 'pick-category': await pickRadio(['apartments / housing for rent', 'apts/housing for rent', 'apartments / housing', 'apartments']); break;
         case 'pick-area': await pickRadio(SOR.subareaCandidates(SOR.analyze(l, state.settings).county)); break;
@@ -437,6 +445,7 @@
         case 'fill': await fillAd(); break;
         case 'continue': clickButton(['continue', 'next', 'accept']); break;
         case 'photos': await addPhotos(); break;
+        case 'clear-old': state.busy = true; render(); await removeCarriedOverImages(); state.busy = false; render(); break;
         case 'done-images': clickButton(['done with images', 'done with image', 'done']); break;
         case 'next': await startNextPosting(); break;
         case 'skip': if (confirm('Skip this listing and start the next one in your queue?')) await skipCurrent(); break;
@@ -504,6 +513,50 @@
     return false;
   }
 
+  // "Re-use selected data from your previous posting?" — re-use it (contact info), but never
+  // the old photos: those belong to the previous listing.
+  function reuseButton() {
+    return findButton(['re-use selected data', 'reuse selected data', 're-use', 'reuse']);
+  }
+
+  async function reuseStep() {
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (cb.closest('#' + PANEL_ID) || !cb.checked) return;
+      if (/image|photo|picture/i.test(labelTextFor(cb) + ' ' + (cb.name || ''))) cb.click();
+    });
+    const b = reuseButton();
+    if (!b) return false;
+    setStatus('Re-using saved contact data…', 'success');
+    b.click();
+    return true;
+  }
+
+  // Photos carried over from a previous posting (already on Craigslist's image server).
+  function carriedOverImages() {
+    return Array.from(document.querySelectorAll('img'))
+      .filter(img => !img.closest('#' + PANEL_ID) && /images\.craigslist\.org/i.test(img.currentSrc || img.src || ''));
+  }
+
+  async function removeCarriedOverImages() {
+    const imgs = carriedOverImages();
+    if (!imgs.length) return 0;
+    // Craigslist may ask "are you sure?"; answer yes from the page's own JS world.
+    try { await chrome.runtime.sendMessage({ action: 'CL_AUTO_CONFIRM' }); } catch (_) { /* best effort */ }
+    let removed = 0;
+    for (const img of imgs) {
+      let box = img.parentElement;
+      let del = null;
+      for (let d = 0; box && d < 4 && !del; d++, box = box.parentElement) {
+        del = Array.from(box.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"]')).find(b =>
+          /^(delete|remove|x|×|✕)$|delete|remove/i.test((b.textContent || b.value || b.title || b.getAttribute('aria-label') || '').trim()) ||
+          /del|remove/i.test(b.className || ''));
+      }
+      if (del && document.contains(del)) { del.click(); removed++; await sleep(400); }
+    }
+    await sleep(800);
+    return removed;
+  }
+
   // ════════════════════════════════════════════════════════════
   // NEXT STEP — one action per page, safe to click repeatedly
   // ════════════════════════════════════════════════════════════
@@ -524,6 +577,10 @@
         if (block) return halt(block);
       }
       switch (mode) {
+        case 'reuse':
+          if (limitReached()) return halt(`Daily limit reached (${state.postsToday} posts today).`);
+          if (!await reuseStep()) halt('Couldn’t find the “re-use selected data” button.');
+          return;
         case 'choose-type':
           if (limitReached()) return halt(`Daily limit reached (${state.postsToday} posts today).`);
           if (!await pickRadio(['housing offered'])) halt('Couldn’t find “housing offered”.');
@@ -582,6 +639,11 @@
     const key = `sor_photos_${postingId() || 'x'}`;
     const n = Math.min((l && l.photoCount) || 0, SOR.MAX_PHOTOS);
     if (n && !sessionStorage.getItem(key)) {
+      if (carriedOverImages().length) {
+        setStatus('Removing photos carried over from the previous ad…', 'info');
+        await removeCarriedOverImages();
+        if (carriedOverImages().length) return halt('Old photos from the previous ad are still here — delete them, then click Next step.');
+      }
       await addPhotos();
       if (!state.photosAdded) return halt('Photos could not be added — refresh the page and click Next step again.');
       sessionStorage.setItem(key, String(Date.now()));

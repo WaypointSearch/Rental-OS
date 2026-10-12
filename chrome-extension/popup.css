@@ -53,3 +53,9 @@ body { width: 370px; max-height: 590px; overflow-y: auto; }
 .badge.q { background: #fff3db; color: #8a5a00; }
 .badge.warn { background: var(--bad-bg); color: var(--bad); }
 .imp .dbg { grid-column: 2; justify-self: start; font-size: 11px; }
+.lookup-row { display: flex; align-items: center; gap: 8px; }
+.lookup-row span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); white-space: nowrap; }
+.lookup-row input { padding: 6px 8px; font-weight: 600; letter-spacing: 0.5px; }
+.code-hit { margin-top: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.code-hit .mls { font-size: 14px; font-weight: 800; color: var(--navy); letter-spacing: 0.3px; }
+.code-hit .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }

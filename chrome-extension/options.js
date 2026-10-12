@@ -20,6 +20,13 @@ async function init() {
   $('#model-list').innerHTML = ['gpt-5-nano', 'gpt-5-mini', 'gpt-4.1-nano', 'gpt-4.1-mini', 'gpt-4o-mini'].map(m => `<option value="${m}">`).join('');
   $('#ai-key').value = await SOR.store.getApiKey();
 
+  $('#rc-digit').innerHTML = '0123456789'.split('').map(d => `<option value="${d}">${d}</option>`).join('');
+  $('#rc-enabled').checked = !!settings.refCode.enabled;
+  $('#rc-bold').checked = !!settings.refCode.bold;
+  $('#rc-digit').value = settings.refCode.digit;
+  $('#rc-after').value = settings.refCode.afterDigit;
+  ['rc-enabled', 'rc-bold', 'rc-digit', 'rc-after'].forEach(id => $(`#${id}`).addEventListener(id === 'rc-after' ? 'input' : 'change', readAndSave));
+
   renderAgents();
   renderPreview();
 
@@ -40,6 +47,10 @@ function readAndSave() {
   CHECKS.forEach(k => { settings[k] = $(`#s-${k}`).checked; });
   VALUES.forEach(k => { settings[k] = $(`#s-${k}`).value; });
   settings.dailyLimit = Math.max(0, Math.floor(Number(settings.dailyLimit) || 0));
+  settings.refCode = {
+    enabled: $('#rc-enabled').checked, bold: $('#rc-bold').checked,
+    digit: $('#rc-digit').value, afterDigit: Math.min(9, Math.max(1, Math.floor(Number($('#rc-after').value) || 3))),
+  };
   settings.ai = { enabled: $('#s-aiEnabled').checked, model: $('#s-aiModel').value.trim() || 'gpt-5-nano' };
   renderPreview();
   queueSave();
@@ -107,7 +118,10 @@ function addAgent() {
 
 function renderPreview() {
   const s = SOR.mergeSettings(settings);
-  $('#sig-preview').textContent = SOR.composeBody('…your property description…', SOR.getAgent(s), s);
+  $('#sig-preview').textContent = SOR.composeBody('…your property description…\n\n…highlights…\n\n…about this home…', SOR.getAgent(s), s, 'F3256961');
+  $('#rc-example').innerHTML = s.refCode.enabled
+    ? `Example: MLS# <b>F3256961</b> → caller code <b>${SOR.refCode('F3256961', s)}</b>`
+    : 'Reference code is off.';
 }
 
 // ── AI ───────────────────────────────────────────────────────

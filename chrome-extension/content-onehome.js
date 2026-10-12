@@ -108,13 +108,14 @@
     const line1 = qa('address-line1');
     const line2 = qa('address-line2');
     data.fullAddress = [line1, line2 && !line1.includes(line2) ? line2 : ''].filter(Boolean).join(', ').replace(/\s+/g, ' ');
-    const addr = data.fullAddress.match(/^(.+?),\s*([^,]+?),\s*([A-Z]{2})\s*(\d{5})(?:-\d{4})?\s*$/) ||
-      data.fullAddress.match(/^(.+?),?\s+([A-Za-z.\s'-]+),\s*([A-Z]{2})\s+(\d{5})/);
+    // "123 SW 4th Ave, Hollywood, FL 33020" or "123 SW 4th Ave Hollywood, FL 33020" (no comma):
+    // split off state + ZIP, then let the city list decide where the street ends.
+    const addr = data.fullAddress.match(/^(.*?)[,\s]+([A-Z]{2})\s+(\d{5})(?:-\d{4})?\s*$/);
     if (addr) {
-      data.streetAddress = addr[1].trim();
-      data.city = addr[2].trim();
-      data.state = addr[3].trim();
-      data.zip = addr[4].trim();
+      data.state = addr[2];
+      data.zip = addr[3];
+      data.city = SOR.cleanCity(addr[1]);
+      data.streetAddress = SOR.cleanStreet(addr[1], data.city);
     }
 
     const pm = qa('house-price').match(/\$[\d,]+/);
@@ -139,6 +140,11 @@
     data.cooling = gf('Cooling');
     data.lotSize = gf('LotSizeAreaOrRange', 'LotSizeArea');
     data.parking = gf('ParkingFeatures', 'GarageParkingFeatures');
+    const featureCity = SOR.cleanCity(gf('City', 'PostalCity'));
+    if (featureCity) {
+      data.city = featureCity;
+      data.streetAddress = SOR.cleanStreet(data.streetAddress, featureCity);
+    }
 
     data.additionalDetails = {};
     document.querySelectorAll('aotf-property-details').forEach(section => {

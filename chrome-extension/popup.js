@@ -33,11 +33,42 @@ async function init() {
   $('#import-links').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) importLinks(); });
   $('#btn-clear-imports').addEventListener('click', () => chrome.runtime.sendMessage({ action: 'CLEAR_IMPORTS' }));
   $('#btn-post').addEventListener('click', postSelected);
+  $('#code-input').addEventListener('input', lookupCode);
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes._importQueue) renderImports();
     if (changes._postQueue || changes.listing_index || Object.keys(changes).some(k => k.startsWith('listing_'))) { renderListings(); renderQueue(); }
   });
+}
+
+// ── Caller's code → listing ──────────────────────────────────
+async function lookupCode() {
+  const raw = $('#code-input').value.trim();
+  const out = $('#code-result');
+  if (raw.replace(/[^A-Za-z0-9]/g, '').length < 4) { out.innerHTML = ''; return; }
+  const norm = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const listings = await SOR.store.getAllListings();
+  const decoded = SOR.decodeRefCode(raw, settings);
+  const hit = listings.find(l => norm(SOR.refCode(l.mlsNumber, settings)) === norm(raw)) ||
+    listings.find(l => norm(l.mlsNumber) === norm(decoded));
+  if (!hit) {
+    out.innerHTML = `<div class="code-hit"><span class="muted">Not in your saved listings.</span><span>Look up MLS# <span class="mls">${esc(decoded)}</span></span></div>`;
+    return;
+  }
+  const posted = hit.posted && hit.posted.clPublishedAt;
+  out.innerHTML = `
+    <div class="code-hit">
+      <span class="mls">${hit.source === 'manual' ? 'By-owner listing' : 'MLS# ' + esc(hit.mlsNumber)}</span>
+      <span>${esc(hit.fullAddress || SOR.listingLabel(hit))}</span>
+      <span class="muted">${esc(SOR.listingLabel(hit))}${posted ? ' · posted ' + esc(timeAgo(posted)) : ''}</span>
+      <div class="row">
+        ${hit.sourceUrl ? `<a class="btn small" href="${esc(hit.sourceUrl)}" target="_blank" rel="noopener">Open on OneHome</a>` : ''}
+        <button class="btn small" type="button" id="code-edit">Edit ad</button>
+        <button class="btn small" type="button" id="code-copy">Copy MLS#</button>
+      </div>
+    </div>`;
+  $('#code-edit').addEventListener('click', () => openEditor(hit.mlsNumber));
+  $('#code-copy').addEventListener('click', async () => { await navigator.clipboard.writeText(hit.mlsNumber); toast('MLS# copied'); });
 }
 
 // ── Import from pasted links ─────────────────────────────────
@@ -261,7 +292,7 @@ async function renderListings() {
     } else if (act === 'copy') {
       const l = await SOR.store.getListing(id);
       const ad = SOR.getAd(l, settings);
-      await navigator.clipboard.writeText(`${ad.title}\n\n${SOR.composeBody(ad.body, SOR.getAgent(settings), settings)}`);
+      await navigator.clipboard.writeText(`${ad.title}\n\n${SOR.composeBody(ad.body, SOR.getAgent(settings), settings, l.mlsNumber)}`);
       toast('Ad copied');
     } else if (act === 'delete') {
       if (!confirm('Delete this listing and its photos?')) return;

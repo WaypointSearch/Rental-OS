@@ -49,6 +49,15 @@ const HANDLERS = {
     return {};
   },
   async OPEN_OPTIONS() { await chrome.runtime.openOptionsPage(); return {}; },
+  // Lets the assistant delete carried-over photos without a page "are you sure?" dialog blocking it.
+  async CL_AUTO_CONFIRM(msg, sender) {
+    if (!sender.tab || !sender.tab.id) return {};
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id }, world: 'MAIN',
+      func: () => { window.confirm = () => true; },
+    });
+    return {};
+  },
   // jQuery UI widgets on Craigslist live in the page's own JS world; the content script
   // can't reach them, so refresh them from the MAIN world after a fill.
   async CL_REFRESH_WIDGETS(msg, sender) {
