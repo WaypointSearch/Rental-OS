@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sun Ocean Realty</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">☀</div>
+    <div>
+      <h1>Sun Ocean Realty</h1>
+      <div id="page-context" class="sub">Loading…</div>
+    </div>
+  </header>
+
+  <section class="agent-bar">
+    <label for="agent-select">Posting as</label>
+    <select id="agent-select"></select>
+  </section>
+
+  <section class="section import">
+    <div class="section-head"><span class="label">Add from OneHome</span><button id="btn-clear-imports" class="linkbtn hidden" type="button">Clear finished</button></div>
+    <textarea id="import-links" rows="2" placeholder="Paste one or more OneHome links (property or search pages)…" spellcheck="false"></textarea>
+    <button id="btn-import" class="btn primary block" type="button">Import listings + photos</button>
+    <div id="imports" class="imports"></div>
+  </section>
+
+  <section id="context" class="section"></section>
+
+  <section class="section">
+    <div class="section-head">
+      <span class="label">Saved listings <span id="listing-count" class="badge">0</span></span>
+      <span class="actions">
+        <button id="btn-new" class="linkbtn" type="button" title="Add a by-owner / off-MLS listing">+ By-owner</button>
+        <button id="btn-clear" class="linkbtn danger" type="button">Clear</button>
+      </span>
+    </div>
+    <div id="listings" class="listings"></div>
+    <button id="btn-post" class="btn sun block post-btn" type="button" disabled>Tick listings to post them on Craigslist</button>
+  </section>
+
+  <footer class="footer">
+    <button id="btn-settings" class="linkbtn" type="button">⚙ Settings</button>
+    <span id="version" class="muted"></span>
+  </footer>
+  <div id="toast" class="toast"></div>
+
+  <script src="lib/ad-engine.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

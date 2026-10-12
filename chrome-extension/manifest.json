@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Sun Ocean Realty – Craigslist Ad Builder",
+  "version": "4.0.0",
+  "description": "Scrape OneHome listings and post high-click Craigslist rental ads for Sun Ocean Realty agents.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://portal.onehome.com/*",
+    "https://*.corelogic.com/*",
+    "https://post.craigslist.org/*",
+    "http://post.craigslist.org/*",
+    "https://api.openai.com/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Sun Ocean Realty",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://portal.onehome.com/*"],
+      "js": ["content-onehome.js"],
+      "css": ["content-onehome.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://post.craigslist.org/*", "http://post.craigslist.org/*"],
+      "js": ["lib/ad-engine.js", "lib/store.js", "craigslist.js"],
+      "css": ["craigslist.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

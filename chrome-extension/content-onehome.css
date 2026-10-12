@@ -1,0 +1,29 @@
+/* Sun Ocean Realty — OneHome floating scrape button */
+#sor-scrape-fab {
+  position: fixed; bottom: 24px; right: 24px; z-index: 2147483000;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#sor-scrape-btn {
+  display: flex; align-items: center; gap: 8px; padding: 12px 20px;
+  background: linear-gradient(135deg, #0a3d5c 0%, #0d6986 100%); color: #fff;
+  border: none; border-radius: 50px; font-size: 14px; font-weight: 600; letter-spacing: 0.3px;
+  cursor: pointer; white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(10, 61, 92, 0.35), 0 2px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+#sor-scrape-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(10, 61, 92, 0.45); }
+#sor-scrape-btn:disabled { opacity: 0.9; cursor: wait; }
+#sor-scrape-btn.sor-scraping { animation: sor-pulse 1.5s ease-in-out infinite; }
+@keyframes sor-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(10, 61, 92, 0.35); }
+  50% { box-shadow: 0 4px 26px rgba(15, 138, 171, 0.65); }
+}
+#sor-scrape-status {
+  padding: 8px 14px; background: #10202e; color: #e6edf3; border-radius: 8px;
+  font-size: 12px; line-height: 1.45; max-width: 290px; text-align: right; white-space: pre-line;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25); border-left: 3px solid #0f8aab;
+}
+#sor-scrape-status.sor-hidden { display: none; }
+#sor-scrape-status.sor-status-success { border-left-color: #22c55e; color: #86efac; }
+#sor-scrape-status.sor-status-error { border-left-color: #ef4444; color: #fca5a5; }

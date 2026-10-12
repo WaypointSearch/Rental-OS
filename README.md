@@ -7,6 +7,15 @@ Google Voice & Facebook Marketplace bots → Supabase → Next.js Kanban pipelin
 
 ---
 
+## Craigslist Ad Builder (Chrome extension)
+
+`chrome-extension/` holds the Sun Ocean Realty Chrome extension. It imports OneHome listings
+(paste links or click Scrape), writes high-click Craigslist rental ads for the selected agent
+(Eric Guillen or Brittini Flinn), and fills every Craigslist field, photos included. Load it
+unpacked from `chrome://extensions`. See [`chrome-extension/README.md`](chrome-extension/README.md).
+
+---
+
 ## Quick boot order
 
 Follow these steps **exactly in order** the first time.

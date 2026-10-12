@@ -1,0 +1,22 @@
+.sticky { position: sticky; top: 0; z-index: 5; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.lead { margin: -4px 0 12px; }
+.rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.btn-row { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.saved-flag { font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.18); padding: 4px 10px; border-radius: 999px; opacity: 0; transition: opacity 0.2s; }
+.saved-flag.show { opacity: 1; }
+
+.agents { display: flex; flex-direction: column; gap: 10px; }
+.agent { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
+.agent.active { border-color: var(--teal); background: #f3fafd; }
+.agent .pick { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; align-self: center; }
+.agent .pick input { width: 18px; height: 18px; accent-color: var(--teal); }
+.agent .full { grid-column: 2 / -1; display: flex; justify-content: flex-end; }
+.sig-preview { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--soft); border-radius: 8px; padding: 12px; }
+
+@media (max-width: 640px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .agent { grid-template-columns: auto minmax(0, 1fr); }
+  .agent .full { grid-column: 1 / -1; }
+}

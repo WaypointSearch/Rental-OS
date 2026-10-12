@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ad Editor · Sun Ocean</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <header class="topbar sticky">
+    <div class="logo">☀</div>
+    <div>
+      <h1 id="page-title">Ad Editor</h1>
+      <div id="page-sub" class="sub">Sun Ocean Realty</div>
+    </div>
+    <span class="spacer"></span>
+    <label class="agent-pick">Posting as <select id="agent-select"></select></label>
+    <button id="btn-save" class="btn sun" type="button">Save</button>
+  </header>
+
+  <main class="layout">
+    <div class="col">
+      <section class="card">
+        <h2><span class="grow">Property facts</span><span id="source-badge" class="badge"></span></h2>
+        <div class="grid">
+          <label class="f span2">Street address<input id="f-streetAddress" type="text" placeholder="123 SW 4th Ave"></label>
+          <label class="f">City<input id="f-city" type="text" placeholder="Pembroke Pines" list="city-list"></label>
+          <label class="f">ZIP<input id="f-zip" type="text" inputmode="numeric" maxlength="10" placeholder="33027"></label>
+          <label class="f">County
+            <select id="f-county">
+              <option value="">Auto (from city)</option>
+              <option>Broward</option><option>Miami-Dade</option><option>Palm Beach</option><option>Other</option>
+            </select>
+          </label>
+          <label class="f">State<input id="f-state" type="text" maxlength="2" placeholder="FL"></label>
+          <label class="f">Rent / month<input id="f-price" type="text" inputmode="numeric" placeholder="$2,800"></label>
+          <label class="f">Property type<select id="f-propertyType"></select></label>
+          <label class="f">Bedrooms<input id="f-bedrooms" type="text" placeholder="3 or Studio"></label>
+          <label class="f">Bathrooms<input id="f-bathrooms" type="text" placeholder="2 or 2.5"></label>
+          <label class="f">Sq ft<input id="f-sqft" type="text" inputmode="numeric" placeholder="1,650"></label>
+          <label class="f">Year built<input id="f-yearBuilt" type="text" inputmode="numeric" placeholder="2004"></label>
+          <label class="f span2">Community / subdivision<input id="f-subdivision" type="text" placeholder="Silver Lakes"></label>
+          <label class="f">Pets allowed
+            <select id="f-petsAllowed"><option value="">Not stated</option><option>Yes</option><option>No</option></select>
+          </label>
+          <label class="f">Furnished
+            <select id="f-furnished"><option value="">Unfurnished</option><option>Furnished</option><option>Partially Furnished</option></select>
+          </label>
+          <label class="f">Pool<input id="f-pool" type="text" placeholder="Private, In Ground / Community / None"></label>
+          <label class="f">Parking / garage<input id="f-parking" type="text" placeholder="2 car garage, attached / Driveway"></label>
+          <label class="f span2">Cooling<input id="f-cooling" type="text" placeholder="Central Air"></label>
+          <label class="f span2">MLS / owner remarks
+            <textarea id="f-description" rows="6" placeholder="Paste the property description. Agent-only lines (showing instructions, compensation, phone numbers) are removed automatically."></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Craigslist selections</h2>
+        <div class="grid three">
+          <label class="f">Housing type<select id="o-housingType"></select></label>
+          <label class="f">Laundry<select id="o-laundry"></select></label>
+          <label class="f">Parking<select id="o-parking"></select></label>
+        </div>
+        <div id="detected" class="detected"></div>
+      </section>
+
+      <section class="card">
+        <h2><span class="grow">Photos</span><span id="photo-count" class="badge"></span>
+          <label class="btn small" for="photo-input">+ Add photos</label>
+          <input id="photo-input" type="file" accept="image/*" multiple class="hidden">
+        </h2>
+        <div id="photos" class="photos"></div>
+        <div class="small muted" style="margin-top:8px">First photo is the cover. Craigslist uses the first 24.</div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2><span class="grow">Craigslist title</span><span id="ad-badge" class="badge"></span></h2>
+        <div class="title-row">
+          <input id="ad-title" type="text" maxlength="70">
+          <span id="title-count" class="count">0/70</span>
+        </div>
+        <div class="small muted" style="margin:10px 0 6px">Title ideas — click to use</div>
+        <div id="title-options" class="title-options"></div>
+        <div class="btn-row">
+          <button id="btn-regen" class="btn" type="button">↻ Fresh auto-written ad</button>
+          <button id="btn-ai" class="btn" type="button">✨ Rewrite with AI</button>
+        </div>
+        <div id="ai-note" class="note hidden" style="margin-top:8px"></div>
+      </section>
+
+      <section class="card">
+        <h2>Description <span class="muted small" style="text-transform:none;letter-spacing:0">(your call-to-action, keywords and signature are added automatically)</span></h2>
+        <textarea id="ad-body" rows="16"></textarea>
+      </section>
+
+      <section class="card">
+        <h2><span class="grow">Final ad preview</span>
+          <button id="btn-copy-title" class="btn small" type="button">Copy title</button>
+          <button id="btn-copy-all" class="btn small" type="button">Copy full ad</button>
+        </h2>
+        <div id="preview-title" class="preview-title"></div>
+        <pre id="preview-body" class="preview-body"></pre>
+      </section>
+    </div>
+  </main>
+
+  <datalist id="city-list"></datalist>
+  <div id="toast" class="toast"></div>
+  <script src="lib/ad-engine.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>

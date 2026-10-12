@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings · Sun Ocean</title>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="topbar sticky">
+    <div class="logo">☀</div>
+    <div>
+      <h1>Settings</h1>
+      <div class="sub">Sun Ocean Realty · Craigslist Ad Builder</div>
+    </div>
+    <span class="spacer"></span>
+    <span id="saved-flag" class="saved-flag">Saved ✓</span>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h2><span class="grow">Agents</span><button id="btn-add-agent" class="btn small" type="button">+ Add agent</button></h2>
+      <p class="small muted lead">Pick who is posting. Their name and phone go into the Craigslist contact fields, the call-to-action and the signature.</p>
+      <div id="agents" class="agents"></div>
+    </section>
+
+    <section class="card">
+      <h2>Craigslist defaults</h2>
+      <div class="rows">
+        <label class="f inline"><input id="s-alwaysPetsAndAC" type="checkbox"> <span>Always check <b>cats OK</b>, <b>dogs OK</b> and <b>air conditioning</b></span></label>
+        <label class="f inline"><input id="s-showPhone" type="checkbox"> <span>Show the agent's phone with <b>calls OK</b> and <b>texts OK</b></span></label>
+        <label class="f inline"><input id="s-showStreet" type="checkbox"> <span>Put the exact street address on the Craigslist map (off = ZIP only)</span></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Laundry when the listing doesn't say<select id="s-defaultLaundry"></select></label>
+        <label class="f">Parking unless a garage is verified<select id="s-defaultParking"></select></label>
+        <label class="f">Brokerage name (signature)<input id="s-brokerage" type="text"></label>
+        <label class="f">Title style
+          <select id="s-titleStyle">
+            <option value="emoji">Emoji 🌴🔥 — most eye-catching</option>
+            <option value="symbols">Symbols ★ ✔ — if Craigslist strips emoji</option>
+            <option value="plain">Plain text</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="grow">“We have more” keyword block</span><button id="btn-reset-keywords" class="btn small" type="button">Reset to default</button></h2>
+      <p class="small muted lead">Added under every description so renters searching for <i>pet friendly</i>, <i>pool home</i>, <i>fast approval</i>, <i>no HOA</i>, or your cities find your ads, even when this property isn't the match. Keep it to real inventory you can show. Write it as sentences, not a long keyword list: Craigslist ghosts ads that look like keyword spam.</p>
+      <label class="f inline" style="margin-bottom:8px"><input id="s-includeKeywords" type="checkbox"> <span>Include this block in every ad</span></label>
+      <textarea id="s-keywords" rows="11"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>AI rewriting (optional)</h2>
+      <p class="small muted lead">Uses your own OpenAI key to write 5 title options and a fresh description per listing. A small "nano/mini" model costs well under a cent per ad. The key stays in this browser and is only sent to OpenAI.</p>
+      <label class="f inline" style="margin-bottom:10px"><input id="s-aiEnabled" type="checkbox"> <span>Turn on AI rewriting</span></label>
+      <div class="grid2">
+        <label class="f">OpenAI API key<input id="ai-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false"></label>
+        <label class="f">Model<input id="s-aiModel" type="text" list="model-list" placeholder="gpt-5-nano" spellcheck="false"></label>
+      </div>
+      <datalist id="model-list"></datalist>
+      <div class="btn-row">
+        <button id="btn-test-ai" class="btn" type="button">Test key &amp; load models</button>
+        <a class="small" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get an API key →</a>
+      </div>
+      <div id="ai-status" class="note hidden" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
+      <h2>Live preview</h2>
+      <p class="small muted lead">How the end of every description looks with the selected agent.</p>
+      <pre id="sig-preview" class="sig-preview"></pre>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+
+  <script src="lib/ad-engine.js"></script>
+  <script src="lib/store.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
