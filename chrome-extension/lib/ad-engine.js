@@ -9,7 +9,7 @@
 
   const SOR = root.SOR = root.SOR || {};
 
-  SOR.VERSION = '4.0.0';
+  SOR.VERSION = '4.1.0';
   SOR.TITLE_MAX = 70;        // Craigslist PostingTitle maxlength (UTF-16 units, emoji count as 2+)
   SOR.MAX_PHOTOS = 24;       // Craigslist housing image limit
   SOR.SETTINGS_KEY = 'sor_settings';
@@ -76,6 +76,11 @@
       includeKeywords: true,
       keywords: SOR.DEFAULT_KEYWORDS,
       ai: { enabled: false, model: 'gpt-5-nano' },
+      // Posting queue / macro
+      autoQueue: true,              // imported listings join the posting queue automatically
+      nextButton: true,             // big fixed "Next step" button on every Craigslist page
+      requeueAfter48h: false,       // put listings back in the queue 48h after they were posted
+      dailyLimit: 0,                // max Craigslist posts per day (0 = no limit)
     };
   };
 
@@ -93,6 +98,7 @@
     if (!SOR.CL.laundry.includes(s.defaultLaundry)) s.defaultLaundry = d.defaultLaundry;
     if (!SOR.CL.parking.includes(s.defaultParking)) s.defaultParking = d.defaultParking;
     if (typeof s.keywords !== 'string') s.keywords = d.keywords;
+    s.dailyLimit = Math.max(0, Math.floor(Number(s.dailyLimit) || 0));
     return s;
   };
 
@@ -708,6 +714,20 @@
     add({ key: 'city', label: 'City (map)', names: ['city'], labels: ['city'], labelExact: true, value: f.city, optional: true });
     add({ key: 'region', label: 'State (map)', kind: 'any', names: ['region', 'state'], labels: ['state'], labelExact: true, value: f.state, options: [f.state.toLowerCase(), 'florida'], optional: true });
     return P;
+  };
+
+  // Craigslist forbids posting the same item more than once every 48 hours.
+  SOR.REPOST_HOURS = 48;
+  SOR.isRecentlyPosted = function (l, hours) {
+    const at = l && l.posted && l.posted.clPublishedAt;
+    return !!at && Date.now() - Date.parse(at) < (hours || SOR.REPOST_HOURS) * 3600 * 1000;
+  };
+  SOR.isPostable = (l) => !!l && !l.needsAttention && !SOR.isRecentlyPosted(l);
+  SOR.postsToday = function (listings) {
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    let n = 0;
+    (listings || []).forEach(l => ((l.posted && l.posted.clPublishLog) || []).forEach(t => { if (Date.parse(t) >= midnight.getTime()) n++; }));
+    return n;
   };
 
   SOR.listingLabel = function (l) {

@@ -16,13 +16,17 @@ The Facebook tools from v3 are gone; this is a OneHome → Craigslist tool only.
 1. **Add listings**
    - Paste one or more OneHome links into the popup and click **Import listings + photos**.
      Each link opens in a background tab, gets scraped (data + every photo), and closes.
-     A OneHome search or collection link imports every property on that page.
+     A share link (`https://portal.onehome.com/en-US/share/…`), search or collection page imports
+     every property on it: the list is scrolled to load everything, and if the cards aren't links
+     each one is opened to read its address. If a page can't be read, the import row shows
+     **Copy debug info**; send that text to whoever maintains the extension.
    - Or open a OneHome property page and click the floating **Scrape** button.
    - Or click **+ By-owner** to type in a listing that isn't on the MLS and upload its photos.
 2. **Polish (optional).** **Edit ad** opens the editor: pick one of six title ideas, edit the
    description, fix facts, override laundry/parking/housing type, reorder photos, or **Rewrite
    with AI**.
-3. **Post.** Tick the listings you want and click **Post N on Craigslist**. The Sun Ocean panel
+3. **Post.** Imported listings join the **posting queue** automatically, in the order they appear
+   on the OneHome page. Or tick listings and click **Queue N & start posting**. The Sun Ocean panel
    on Craigslist then walks every step:
    - type → **housing offered**
    - category → **apartments / housing for rent**
@@ -35,6 +39,41 @@ The Facebook tools from v3 are gone; this is a OneHome → Craigslist tool only.
 
 Each Craigslist posting is tied to its listing the moment you start it, so the photo step always
 uploads the right listing's photos, even with several Craigslist tabs open.
+
+## Posting queue, NEXT STEP and click macros
+
+Every new Craigslist posting automatically takes the **next listing in the queue**. Once it's
+published it leaves the queue, and the next posting gets the next listing, until every property
+from the link has been posted.
+
+The big orange **▶ NEXT STEP** button sits in the same spot (bottom-right) on every Craigslist page.
+**Alt+Shift+N** does the same thing; change it at `chrome://extensions/shortcuts`. Each click does
+what that page needs:
+
+| Page | NEXT STEP does |
+|---|---|
+| type / category / area | picks housing offered → apartments / housing for rent → the listing's county |
+| ad details | fills everything, verifies no required field is empty (re-fills if one is), then clicks Continue |
+| map | Continue |
+| images | adds the listing's photos, waits for uploads to finish, clicks "done with images" |
+| preview | publishes and marks the listing posted |
+| posted | starts the next posting for the next listing in the queue |
+
+That means a recorded click macro only needs to click that one spot in a loop, with pauses.
+Built-in safety stops:
+
+- **Never re-posts within 48 hours.** Craigslist's rule is one post per item per 48h.
+- **Stops when the queue is finished.** Further clicks do nothing ("All caught up").
+- **Flags instead of guessing.** If a required field still can't be filled after 3 tries, or
+  Craigslist keeps rejecting the ad, the listing is marked **⚠ Needs attention** (with the reason)
+  and the next listing starts. Fix it, then click **Retry** in the popup.
+- **Unknown pages** (sign-in, phone verification, payment, captcha) are left alone and labelled
+  "needs a person".
+- Optional **max posts per day**, and optional **re-queue after 48h** to keep listings rotating.
+
+Stay signed in to your Craigslist account so publishing doesn't wait on an email confirmation.
+Craigslist's terms restrict automated posting, and accounts that post very often or in rigid
+patterns can get ads ghosted or the account blocked. Keep volume reasonable.
 
 ## What gets filled
 
@@ -60,6 +99,8 @@ filler keeps working if Craigslist renames its form fields.
 ## Settings
 
 - **Agents.** Add, edit or remove agents and choose the active one.
+- **Posting queue & Next-step button.** Auto-queue imports, show the button, re-queue after 48h,
+  daily limit.
 - **Craigslist defaults.** Always check pets/AC; default laundry and parking; show phone;
   whether to put the exact street on the map (off by default, so the map uses the ZIP only).
 - **Title style.** Emoji 🌴 (default), Symbols ★ (use this if Craigslist strips emoji), or plain.
@@ -79,6 +120,6 @@ filler keeps working if Craigslist renames its form fields.
 | `background.js` | Photo downloads, link-import queue, OpenAI calls, Craigslist widget refresh |
 | `lib/ad-engine.js` | Listing analysis, titles, descriptions, Craigslist fill plan (pure functions) |
 | `lib/store.js` | Listings, photos and settings in `chrome.storage.local` |
-| `content-onehome.js` | OneHome scraper (floating button + background import) |
-| `craigslist.js` | Craigslist step-by-step assistant panel |
+| `content-onehome.js` | OneHome scraper (floating button, background import, share/search pages) |
+| `craigslist.js` | Craigslist step-by-step assistant panel, posting queue and NEXT STEP engine |
 | `popup.*`, `editor.*`, `options.*`, `ui.css` | Extension pages |

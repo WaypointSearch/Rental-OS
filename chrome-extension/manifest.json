@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sun Ocean Realty – Craigslist Ad Builder",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Scrape OneHome listings and post high-click Craigslist rental ads for Sun Ocean Realty agents.",
   "permissions": [
     "storage",
@@ -30,6 +30,12 @@
     }
   },
   "options_page": "options.html",
+  "commands": {
+    "next-step": {
+      "suggested_key": { "default": "Alt+Shift+N" },
+      "description": "Craigslist: do the next posting step"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://portal.onehome.com/*"],

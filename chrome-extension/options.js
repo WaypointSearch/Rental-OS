@@ -4,6 +4,8 @@
 const $ = (sel) => document.querySelector(sel);
 let settings = null;
 let saveTimer = null;
+const CHECKS = ['alwaysPetsAndAC', 'showPhone', 'showStreet', 'includeKeywords', 'autoQueue', 'nextButton', 'requeueAfter48h'];
+const VALUES = ['defaultLaundry', 'defaultParking', 'brokerage', 'titleStyle', 'keywords', 'dailyLimit'];
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -11,8 +13,8 @@ async function init() {
   settings = await SOR.store.loadSettings();
   $('#s-defaultLaundry').innerHTML = SOR.CL.laundry.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
   $('#s-defaultParking').innerHTML = SOR.CL.parking.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
-  ['alwaysPetsAndAC', 'showPhone', 'showStreet', 'includeKeywords'].forEach(k => { $(`#s-${k}`).checked = !!settings[k]; });
-  ['defaultLaundry', 'defaultParking', 'brokerage', 'titleStyle', 'keywords'].forEach(k => { $(`#s-${k}`).value = settings[k]; });
+  CHECKS.forEach(k => { $(`#s-${k}`).checked = !!settings[k]; });
+  VALUES.forEach(k => { $(`#s-${k}`).value = settings[k]; });
   $('#s-aiEnabled').checked = !!settings.ai.enabled;
   $('#s-aiModel').value = settings.ai.model || '';
   $('#model-list').innerHTML = ['gpt-5-nano', 'gpt-5-mini', 'gpt-4.1-nano', 'gpt-4.1-mini', 'gpt-4o-mini'].map(m => `<option value="${m}">`).join('');
@@ -35,8 +37,9 @@ async function init() {
 }
 
 function readAndSave() {
-  ['alwaysPetsAndAC', 'showPhone', 'showStreet', 'includeKeywords'].forEach(k => { settings[k] = $(`#s-${k}`).checked; });
-  ['defaultLaundry', 'defaultParking', 'brokerage', 'titleStyle', 'keywords'].forEach(k => { settings[k] = $(`#s-${k}`).value; });
+  CHECKS.forEach(k => { settings[k] = $(`#s-${k}`).checked; });
+  VALUES.forEach(k => { settings[k] = $(`#s-${k}`).value; });
+  settings.dailyLimit = Math.max(0, Math.floor(Number(settings.dailyLimit) || 0));
   settings.ai = { enabled: $('#s-aiEnabled').checked, model: $('#s-aiModel').value.trim() || 'gpt-5-nano' };
   renderPreview();
   queueSave();

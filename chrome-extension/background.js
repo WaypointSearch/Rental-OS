@@ -222,7 +222,10 @@ async function importOne(item) {
     await waitForTabLoaded(tab.id, IMPORT_TIMEOUT);
     await updateImport(item.id, { msg: 'Reading listing…' });
     const res = await sendToTab(tab.id, { action: 'EXTRACT_FOR_IMPORT' }, IMPORT_TIMEOUT);
-    if (!res || !res.success) throw new Error((res && res.error) || 'Could not read this OneHome page.');
+    if (!res || !res.success) {
+      if (res && res.debug) await updateImport(item.id, { debug: JSON.stringify(res.debug, null, 2) });
+      throw new Error((res && res.error) || 'Could not read this OneHome page.');
+    }
     if (res.kind === 'list') {
       await chrome.tabs.remove(tab.id).catch(() => {});
       if (!res.links.length) throw new Error('No properties found on this OneHome page.');
@@ -236,6 +239,8 @@ async function importOne(item) {
     await chrome.tabs.remove(tab.id).catch(() => {});
     await handleScrape(listing, res.photos);
     const saved = await SOR.store.getListing(listing.mlsNumber);
+    const settings = await SOR.store.loadSettings();
+    if (settings.autoQueue && saved && SOR.isPostable(saved)) await SOR.store.appendToQueue([saved.mlsNumber]);
     await updateImport(item.id, {
       status: 'done', mls: listing.mlsNumber,
       label: SOR.listingLabel(saved || listing), msg: `${(saved && saved.photoCount) || 0} photos`,
@@ -262,13 +267,19 @@ function waitForTabLoaded(tabId, timeout) {
 }
 
 // The content script may not be injected the instant the tab finishes loading — retry.
+// A search/share page can take minutes (it clicks through every property), so the reply
+// itself gets a generous cap.
 async function sendToTab(tabId, msg, timeout) {
   const deadline = Date.now() + timeout;
   let lastErr = null;
   while (Date.now() < deadline) {
     try {
-      return await chrome.tabs.sendMessage(tabId, msg);
+      return await Promise.race([
+        chrome.tabs.sendMessage(tabId, msg),
+        sleep(8 * 60000).then(() => { throw new Error('Timed out reading the OneHome page.'); }),
+      ]);
     } catch (e) {
+      if (/Timed out/.test(e.message)) throw e;
       lastErr = e;
       await sleep(1000);
     }
@@ -286,6 +297,13 @@ async function sendToTab(tabId, msg, timeout) {
   await chrome.storage.local.set({ _importQueue: q });
   runImportQueue();
 })();
+
+// Keyboard shortcut (Alt+Shift+N by default): run the Craigslist "Next step" in the active tab.
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'next-step') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.id) chrome.tabs.sendMessage(tab.id, { action: 'CL_NEXT' }).catch(() => {});
+});
 
 // ── OpenAI ─────────────────────────────────────────────────────
 async function openaiRequest(path, apiKey, body) {

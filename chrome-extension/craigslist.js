@@ -2,6 +2,11 @@
 // Walks every post.craigslist.org step: picks "housing offered" → "apartments / housing for rent"
 // → county, fills every ad field (with defaults when the listing is silent), reports anything it
 // could not fill, injects photos, and checks the preview.
+//
+// Queue + "Next step": each new posting takes the next listing in the posting queue. The fixed
+// NEXT STEP button (or Alt+Shift+N) performs whatever the current page needs, so the whole flow can
+// be driven by clicking one spot. It never re-posts a listing inside Craigslist's 48-hour window,
+// stops when the queue is finished, and flags (then skips) a listing it can't complete.
 (function () {
   'use strict';
   if (window.__sorCL) return;
@@ -10,9 +15,11 @@
   const SOR = window.SOR;
   const PANEL_ID = 'sor-cl-panel';
   const state = {
-    mode: '', settings: null, listings: [], mls: '', queue: [], titleIdx: 0, customTitle: null,
-    report: null, status: null, busy: false, collapsed: false, photosAdded: false,
+    mode: '', settings: null, listings: [], mls: '', queue: [], nextId: '', postsToday: 0,
+    titleIdx: 0, customTitle: null, report: null, status: null, busy: false, collapsed: false,
+    photosAdded: false, nextBusy: false, nextNote: '', publishing: false,
   };
+  const NEXT_ID = 'sor-next';
   let detectTimer = null;
 
   boot();
@@ -27,6 +34,15 @@
     new MutationObserver(scheduleDetect).observe(document.documentElement, { childList: true, subtree: true });
     ['pageshow', 'popstate', 'hashchange'].forEach(ev => window.addEventListener(ev, scheduleDetect));
     chrome.storage.onChanged.addListener(onStorageChanged);
+    // Publishing by hand (Craigslist's own button) also counts as posted.
+    document.addEventListener('click', (e) => {
+      if (state.mode !== 'preview' || state.publishing || !state.mls) return;
+      const b = e.target.closest && e.target.closest('button, input[type="submit"]');
+      if (b && !b.closest('#' + PANEL_ID) && !b.closest('#' + NEXT_ID) && norm(b.textContent || b.value) === 'publish') {
+        state.publishing = true;
+        SOR.store.markPublished(state.mls);
+      }
+    }, true);
   }
 
   // Each Craigslist posting has its own id in the URL (/k/<key>/<id>). Binding it to a listing the
@@ -37,12 +53,15 @@
     return m ? m[1] : '';
   }
 
+  const boundMls = (v) => (v && typeof v === 'object' ? v.mls : v) || '';
+
   async function bindPosting(mls, force) {
     const pid = postingId();
     if (!pid || !mls) return;
     const { _clPostings: map = {} } = await chrome.storage.local.get('_clPostings');
-    if (map[pid] === mls || (map[pid] && !force)) return;
-    map[pid] = mls;
+    const cur = boundMls(map[pid]);
+    if (cur === mls || (cur && !force)) return;
+    map[pid] = { mls, at: Date.now() };
     const keys = Object.keys(map);
     keys.slice(0, Math.max(0, keys.length - 50)).forEach(k => delete map[k]);
     await chrome.storage.local.set({ _clPostings: map });
@@ -51,37 +70,65 @@
   async function refreshData() {
     state.settings = await SOR.store.loadSettings();
     state.listings = await SOR.store.getAllListings();
-    const r = await chrome.storage.local.get(['_activeMLS', '_clPostings', '_postQueue']);
+    const r = await chrome.storage.local.get(['_activeMLS', '_clPostings']);
     const has = (id) => !!id && state.listings.some(l => l.mlsNumber === id);
-    const bound = (r._clPostings || {})[postingId()];
-    state.mls = has(bound) ? bound : has(r._activeMLS) ? r._activeMLS : (state.listings[0] ? state.listings[0].mlsNumber : '');
-    state.queue = (Array.isArray(r._postQueue) ? r._postQueue : []).filter(has);
-    if (!has(bound)) await bindPosting(state.mls, true);
+    state.queue = await SOR.store.syncQueue(state.settings, state.listings);
+    state.nextId = SOR.store.nextPostable(state.queue, state.listings);
+    state.postsToday = SOR.postsToday(state.listings);
+    const bound = boundMls((r._clPostings || {})[postingId()]);
+    if (has(bound)) { state.mls = bound; return; }
+    // A new posting takes the next listing in the queue; with no queue, the listing picked last.
+    state.mls = state.nextId ||
+      (state.queue.length ? '' : has(r._activeMLS) ? r._activeMLS : (state.listings[0] ? state.listings[0].mlsNumber : ''));
+    if (state.mls) await bindPosting(state.mls, true);
   }
 
-  async function completeCurrent() {
-    const { _postQueue: q = [] } = await chrome.storage.local.get('_postQueue');
-    if (q.includes(state.mls)) await chrome.storage.local.set({ _postQueue: q.filter(x => x !== state.mls) });
-    const l = await SOR.store.getListing(state.mls);
-    if (l && l.posted && !l.posted.clPublishedAt) {
-      l.posted.clPublishedAt = new Date().toISOString();
-      await SOR.store.saveListing(l);
-    }
+  function limitReached() {
+    const lim = state.settings && state.settings.dailyLimit;
+    return lim > 0 && state.postsToday >= lim;
   }
 
-  async function goNext(skip) {
-    const { _postQueue: q = [] } = await chrome.storage.local.get('_postQueue');
-    const rest = q.filter(x => x !== state.mls && state.listings.some(l => l.mlsNumber === x));
-    if (skip) await chrome.storage.local.set({ _postQueue: rest });
-    if (!rest.length) { setStatus('Queue finished — nothing left to post.', 'success'); return; }
-    await chrome.storage.local.set({ _activeMLS: rest[0] });
+  // Why this listing must not be posted right now ('' = fine).
+  function blockReason(l) {
+    if (!l) return state.queue.length
+      ? 'Every queued listing was posted in the last 48 hours — nothing to post yet.'
+      : 'All caught up — nothing left in the posting queue.';
+    if (l.needsAttention) return `This listing is flagged: ${l.needsAttention.reason}`;
+    if (SOR.isRecentlyPosted(l)) return 'This listing was posted in the last 48 hours (Craigslist allows one post per 48h).';
+    return '';
+  }
+
+  async function startNextPosting() {
+    await refreshData();
+    if (limitReached()) return halt(`Daily limit reached (${state.postsToday} posts today). Change it in Settings.`);
+    if (!state.nextId) return halt(blockReason(null));
+    await chrome.storage.local.set({ _activeMLS: state.nextId });
+    setStatus('Starting the next posting…', 'success');
     location.href = SOR.CL_POST_URL;
+  }
+
+  async function skipCurrent() {
+    if (state.mls) await SOR.store.removeFromQueue(state.mls);
+    await startNextPosting();
+  }
+
+  // Can't finish this listing unattended: flag it for a person and move on to the next one.
+  async function giveUp(reason) {
+    if (state.mls) await SOR.store.markNeedsAttention(state.mls, reason);
+    halt(`Skipped: ${reason}. Moving to the next listing…`);
+    await sleep(1500);
+    await startNextPosting();
+  }
+
+  function halt(msg) {
+    state.nextNote = msg;
+    setStatus(msg, 'error');
   }
 
   function onStorageChanged(changes, area) {
     if (area !== 'local') return;
     const relevant = Object.keys(changes).some(k => k === SOR.SETTINGS_KEY || k === 'listing_index' || k === '_activeMLS' || k === '_postQueue' || k.startsWith('listing_'));
-    if (!relevant) return;
+    if (!relevant || state.nextBusy) return;
     refreshData().then(() => {
       const panel = document.getElementById(PANEL_ID);
       if (panel && panel.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
@@ -98,10 +145,14 @@
     if (!document.body) return;
     const mode = getMode();
     if (mode === state.mode && document.getElementById(PANEL_ID)) return;
-    if (mode !== state.mode) { state.report = null; state.status = null; state.photosAdded = false; }
+    if (mode !== state.mode) { state.report = null; state.status = null; state.photosAdded = false; state.nextNote = ''; }
     state.mode = mode;
     render();
-    if (mode === 'done' && state.mls) completeCurrent().then(refreshData).then(render);
+    // Landing on the "posted" page without our publish click (e.g. published by hand elsewhere).
+    if (mode === 'done' && state.mls) {
+      const l = activeListing();
+      if (l && !SOR.isRecentlyPosted(l, 0.25)) SOR.store.markPublished(state.mls).then(refreshData).then(render);
+    }
   }
 
   // ════════════════════════════════════════════════════════════
@@ -166,6 +217,7 @@
       panel.addEventListener('input', onPanelInput);
     }
     panel.classList.toggle('sor-collapsed', state.collapsed);
+    renderNextButton();
     if (state.collapsed) {
       panel.innerHTML = `<button type="button" class="sor-fab" data-act="expand" title="Open Sun Ocean assistant">☀</button>`;
       return;
@@ -173,7 +225,9 @@
     const s = state.settings || SOR.mergeSettings({});
     const l = activeListing();
     const agentOpts = s.agents.map(a => `<option value="${esc(a.id)}" ${a.id === s.activeAgentId ? 'selected' : ''}>${esc(a.name)} · ${esc(SOR.formatPhone(a.phone))}</option>`).join('');
-    const listingOpts = state.listings.map(x => `<option value="${esc(x.mlsNumber)}" ${x.mlsNumber === state.mls ? 'selected' : ''}>${esc(SOR.listingLabel(x))}${x.posted && x.posted.craigslist ? ' ✓' : ''}</option>`).join('');
+    const mark = (x) => (x.needsAttention ? ' ⚠' : SOR.isRecentlyPosted(x) ? ' ✓ posted' : '');
+    const listingOpts = (state.mls ? '' : '<option value="" selected>— choose a listing —</option>') +
+      state.listings.map(x => `<option value="${esc(x.mlsNumber)}" ${x.mlsNumber === state.mls ? 'selected' : ''}>${esc(SOR.listingLabel(x))}${mark(x)}</option>`).join('');
 
     panel.innerHTML = `
       <div class="sor-head">
@@ -187,7 +241,7 @@
           ? `<label class="sor-field"><span>Listing</span><select data-role="listing">${listingOpts}</select></label>`
           : `<div class="sor-empty">No saved listings yet. Scrape one on OneHome or add a by-owner listing.<br><button type="button" class="sor-link" data-act="new-listing">+ Add by-owner listing</button></div>`}
         ${renderQueue()}
-        ${l ? renderStep(l) : ''}
+        ${l ? renderStep(l) : (state.listings.length ? `<div class="sor-ok-box">${esc(blockReason(null))}</div>` : '')}
         ${renderStatus()}
         ${renderReport()}
       </div>`;
@@ -239,9 +293,8 @@
       case 'preview':
         return renderPreviewCheck(l);
       case 'done': {
-        const next = state.queue.find(x => x !== state.mls);
-        const nl = next && state.listings.find(x => x.mlsNumber === next);
-        return `<div class="sor-ok-box">🎉 Posted! Craigslist will email a link to manage the ad.</div>${nl ? btn('next', `Post next: ${SOR.listingLabel(nl)}`) : `<a class="sor-link" href="${SOR.CL_POST_URL}">Post another listing →</a>`}`;
+        const nl = state.nextId && state.listings.find(x => x.mlsNumber === state.nextId);
+        return `<div class="sor-ok-box">🎉 Posted! Craigslist will email a link to manage the ad.</div>${nl ? btn('next', `Post next: ${SOR.listingLabel(nl)}`) : `<div class="sor-hint">${esc(blockReason(null))}</div><a class="sor-link" href="${SOR.CL_POST_URL}">Post another listing →</a>`}`;
       }
       default:
         return `<div class="sor-hint">Assistant is on. Start a posting and it will guide every step.</div><a class="sor-link" href="${SOR.CL_POST_URL}">Start a new South Florida posting →</a>`;
@@ -249,10 +302,35 @@
   }
 
   function renderQueue() {
-    if (!state.queue.length) return '';
-    const pos = state.queue.indexOf(state.mls);
-    const left = state.queue.filter(x => x !== state.mls).length;
-    return `<div class="sor-queue"><span>${pos >= 0 ? `Queue: listing ${pos + 1} of ${state.queue.length}` : `${left} more in your queue`}</span>${left && state.mode !== 'done' ? '<button type="button" class="sor-link" data-act="skip">Skip →</button>' : ''}</div>`;
+    const postable = state.queue.filter(id => SOR.isPostable(state.listings.find(l => l.mlsNumber === id)));
+    if (!postable.length) return '';
+    const pos = postable.indexOf(state.mls);
+    const left = postable.filter(x => x !== state.mls).length;
+    const lim = state.settings && state.settings.dailyLimit;
+    return `<div class="sor-queue"><span>${pos >= 0 ? `Queue: listing ${pos + 1} of ${postable.length}` : `${left} in your posting queue`}${lim ? ` · ${state.postsToday}/${lim} today` : ''}</span>${pos >= 0 && left && state.mode !== 'done' ? '<button type="button" class="sor-link" data-act="skip">Skip →</button>' : ''}</div>`;
+  }
+
+  // ── Fixed NEXT STEP button (same screen spot on every page, for a click macro) ──
+  const NEXT_LABEL = {
+    'choose-type': 'choose “housing offered”', 'choose-category': 'choose “apartments / housing for rent”',
+    'choose-area': 'choose the county', 'choose-other': 'choose the area', edit: 'fill, verify & continue',
+    map: 'continue past the map', images: 'add photos & finish', preview: 'publish', done: 'start the next listing',
+    setup: 'start the next listing',
+  };
+
+  function renderNextButton() {
+    let el = document.getElementById(NEXT_ID);
+    if (!state.settings || !state.settings.nextButton) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = NEXT_ID;
+      document.body.appendChild(el);
+      el.addEventListener('click', (e) => { if (e.target.closest('button')) nextStep(); });
+    }
+    const l = activeListing();
+    const what = NEXT_LABEL[state.mode] || 'next';
+    const note = state.nextNote || (l && !/^(done|setup)$/.test(state.mode) ? `${SOR.listingLabel(l)} → ${what}` : `Next: ${what}`);
+    el.innerHTML = `<div class="sor-next-note">${esc(note)}</div><button type="button" ${state.nextBusy ? 'disabled' : ''}>${state.nextBusy ? 'WORKING…' : '▶ NEXT STEP'}</button>`;
   }
 
   function renderPreviewCheck(l) {
@@ -360,8 +438,8 @@
         case 'continue': clickButton(['continue', 'next', 'accept']); break;
         case 'photos': await addPhotos(); break;
         case 'done-images': clickButton(['done with images', 'done with image', 'done']); break;
-        case 'next': await goNext(false); break;
-        case 'skip': if (confirm('Skip this listing and start the next one in your queue?')) await goNext(true); break;
+        case 'next': await startNextPosting(); break;
+        case 'skip': if (confirm('Skip this listing and start the next one in your queue?')) await skipCurrent(); break;
       }
     } catch (err) {
       state.busy = false;
@@ -395,7 +473,7 @@
     const cands = candidates.map(norm).filter(Boolean);
     let hit = null;
     for (const c of cands) { hit = opts.find(o => o.text === c) || opts.find(o => o.text.startsWith(c)) || opts.find(o => o.text.includes(c)); if (hit) break; }
-    if (!hit) { setStatus(`Couldn't find “${candidates[0] || 'that option'}” — pick it on the page.`, 'error'); return; }
+    if (!hit) { setStatus(`Couldn't find “${candidates[0] || 'that option'}” — pick it on the page.`, 'error'); return false; }
     hit.el.click();
     if (!hit.el.checked) { hit.el.checked = true; hit.el.dispatchEvent(new Event('change', { bubbles: true })); }
     setStatus(`Selected “${hit.text}”…`, 'success');
@@ -406,17 +484,137 @@
       const submit = Array.from(form.querySelectorAll('button, input[type="submit"]')).find(b => /continue|next|submit/i.test(b.textContent || b.value || '') || b.type === 'submit');
       if (submit) submit.click();
     }
+    return true;
+  }
+
+  function findButton(words, root) {
+    const buttons = Array.from((root || document).querySelectorAll('button, input[type="submit"], input[type="button"], a.button'))
+      .filter(b => !b.closest('#' + PANEL_ID) && !b.closest('#' + NEXT_ID) && !b.disabled);
+    for (const w of words) {
+      const b = buttons.find(x => norm(x.textContent || x.value) === w) || buttons.find(x => norm(x.textContent || x.value).includes(w));
+      if (b) return b;
+    }
+    return null;
   }
 
   function clickButton(words) {
-    const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.button'))
-      .filter(b => !b.closest('#' + PANEL_ID));
-    for (const w of words) {
-      const b = buttons.find(x => norm(x.textContent || x.value) === w) || buttons.find(x => norm(x.textContent || x.value).includes(w));
-      if (b) { b.click(); setStatus(`Clicked “${norm(b.textContent || b.value)}”.`, 'success'); return true; }
-    }
+    const b = findButton(words);
+    if (b) { b.click(); setStatus(`Clicked “${norm(b.textContent || b.value)}”.`, 'success'); return true; }
     setStatus('Couldn\'t find that button — click it on the page.', 'error');
     return false;
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // NEXT STEP — one action per page, safe to click repeatedly
+  // ════════════════════════════════════════════════════════════
+  async function nextStep() {
+    if (state.nextBusy || state.busy) return;
+    state.nextBusy = true;
+    state.nextNote = '';
+    renderNextButton();
+    try {
+      await refreshData();
+      state.mode = getMode();
+      const l = activeListing();
+      const f = l ? SOR.analyze(l, state.settings) : null;
+      const mode = state.mode;
+      if (mode === 'done' || (mode === 'setup' && !postingId())) return await startNextPosting();
+      if (mode !== 'preview' && mode !== 'setup') {
+        const block = blockReason(l);
+        if (block) return halt(block);
+      }
+      switch (mode) {
+        case 'choose-type':
+          if (limitReached()) return halt(`Daily limit reached (${state.postsToday} posts today).`);
+          if (!await pickRadio(['housing offered'])) halt('Couldn’t find “housing offered”.');
+          return;
+        case 'choose-category':
+          if (!await pickRadio(['apartments / housing for rent', 'apts/housing for rent', 'apartments / housing', 'apartments'])) halt('Couldn’t find “apartments / housing for rent”.');
+          return;
+        case 'choose-area':
+          if (!await pickRadio(SOR.subareaCandidates(f.county))) halt(`Couldn’t tell which area ${f.city || 'this listing'} belongs to.`);
+          return;
+        case 'choose-other':
+          if (!await pickRadio([norm(f.city), 'bypass this step', 'bypass', 'skip'].filter(Boolean))) return giveUp('Craigslist asked for an area option that wasn’t recognized');
+          return;
+        case 'edit': return await editStep();
+        case 'map':
+          if (!clickButton(['continue', 'next'])) halt('Couldn’t find Continue on the map page.');
+          return;
+        case 'images': return await imagesStep();
+        case 'preview': return await publishStep();
+        default:
+          return halt('This Craigslist page needs a person (sign-in, verification or payment?).');
+      }
+    } catch (err) {
+      halt(err.message || String(err));
+    } finally {
+      state.nextBusy = false;
+      renderNextButton();
+    }
+  }
+
+  async function editStep() {
+    const key = `sor_edit_tries_${postingId() || 'x'}`;
+    const tries = (Number(sessionStorage.getItem(key)) || 0) + 1;
+    sessionStorage.setItem(key, String(tries));
+    if (tries > 3) {
+      const errs = craigslistErrors();
+      return giveUp(`Craigslist kept rejecting the ad${errs.length ? ': ' + errs.join(' ') : ''}`);
+    }
+    await fillAd();
+    const missing = (state.report && state.report.missing) || [];
+    if (missing.length) {
+      const labels = missing.map(m => m.label).join(', ');
+      if (tries >= 3) return giveUp(`Craigslist still needs: ${labels}`);
+      return halt(`Still empty: ${labels} (try ${tries} of 3).`);
+    }
+    setStatus('Every required field is filled — continuing…', 'success');
+    await sleep(400);
+    const form = postingForm();
+    const go = (form && (findButton(['continue'], form) || form.querySelector('button[type="submit"], input[type="submit"]'))) || findButton(['continue']);
+    if (!go) return halt('Couldn’t find the Continue button.');
+    go.click();
+  }
+
+  async function imagesStep() {
+    const l = activeListing();
+    const key = `sor_photos_${postingId() || 'x'}`;
+    const n = Math.min((l && l.photoCount) || 0, SOR.MAX_PHOTOS);
+    if (n && !sessionStorage.getItem(key)) {
+      await addPhotos();
+      if (!state.photosAdded) return halt('Photos could not be added — refresh the page and click Next step again.');
+      sessionStorage.setItem(key, String(Date.now()));
+    }
+    setStatus('Waiting for photo uploads to finish…', 'info');
+    await waitForUploads();
+    if (!clickButton(['done with images', 'done with image', 'done'])) halt('Couldn’t find “done with images”.');
+  }
+
+  // Done when no progress/spinner is visible for 3 seconds (max 2 minutes).
+  async function waitForUploads() {
+    const start = Date.now();
+    let quietSince = Date.now();
+    while (Date.now() - start < 120000) {
+      const busy = Array.from(document.querySelectorAll('progress, .progress, [class*="progress"], [class*="uploading"], [class*="spinner"], [class*="loading"]'))
+        .some(el => !el.closest('#' + PANEL_ID) && !el.closest('#' + NEXT_ID) && el.offsetParent !== null &&
+          !(el.tagName === 'PROGRESS' && el.max && el.value >= el.max) && !/100\s*%|complete|done/i.test(el.textContent || ''));
+      if (busy) quietSince = Date.now();
+      if (Date.now() - quietSince >= 3000 && Date.now() - start >= 4000) return true;
+      await sleep(500);
+    }
+    return false;
+  }
+
+  async function publishStep() {
+    const l = activeListing();
+    if (!l) return halt('No listing is tied to this posting.');
+    if (SOR.isRecentlyPosted(l)) return halt('Already published in the last 48 hours — not publishing again.');
+    const b = findButton(['publish']);
+    if (!b) return halt('Couldn’t find the Publish button.');
+    state.publishing = true;
+    await SOR.store.markPublished(l.mlsNumber);
+    b.click();
   }
 
   // ════════════════════════════════════════════════════════════
@@ -750,6 +948,9 @@
       chrome.storage.local.set({ _panelCollapsed: false });
       refreshData().then(render);
       sendResponse({ success: true });
+    } else if (msg.action === 'CL_NEXT') {
+      nextStep();
+      sendResponse({ success: true, mode: state.mode });
     } else if (msg.action === 'CL_FILL') {
       refreshData().then(() => { if (msg.mlsNumber) state.mls = msg.mlsNumber; return state.mode === 'edit' ? fillAd() : null; });
       sendResponse({ success: true, mode: state.mode });

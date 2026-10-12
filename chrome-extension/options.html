@@ -47,6 +47,19 @@
     </section>
 
     <section class="card">
+      <h2>Posting queue &amp; Next-step button</h2>
+      <p class="small muted lead">Imported listings line up in a queue. Each new Craigslist posting takes the next one, and the big <b>▶ NEXT STEP</b> button (bottom-right on every Craigslist page, or <b>Alt+Shift+N</b>) does whatever that page needs: choose, fill + verify, add photos, publish, then start the next listing. It stops when the queue is done, never re-posts a listing within Craigslist's 48-hour window, and flags a listing it can't finish instead of guessing.</p>
+      <div class="rows">
+        <label class="f inline"><input id="s-autoQueue" type="checkbox"> <span>Add imported listings to the posting queue automatically</span></label>
+        <label class="f inline"><input id="s-nextButton" type="checkbox"> <span>Show the <b>▶ NEXT STEP</b> button on Craigslist</span></label>
+        <label class="f inline"><input id="s-requeueAfter48h" type="checkbox"> <span>Put listings back in the queue 48 hours after they're posted (keeps them rotating)</span></label>
+      </div>
+      <div class="grid2">
+        <label class="f">Max Craigslist posts per day (0 = no limit)<input id="s-dailyLimit" type="number" min="0" step="1"></label>
+      </div>
+    </section>
+
+    <section class="card">
       <h2><span class="grow">“We have more” keyword block</span><button id="btn-reset-keywords" class="btn small" type="button">Reset to default</button></h2>
       <p class="small muted lead">Added under every description so renters searching for <i>pet friendly</i>, <i>pool home</i>, <i>fast approval</i>, <i>no HOA</i>, or your cities find your ads, even when this property isn't the match. Keep it to real inventory you can show. Write it as sentences, not a long keyword list: Craigslist ghosts ads that look like keyword spam.</p>
       <label class="f inline" style="margin-bottom:8px"><input id="s-includeKeywords" type="checkbox"> <span>Include this block in every ad</span></label>

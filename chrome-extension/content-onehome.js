@@ -206,43 +206,160 @@
     }
   }
 
-  // Search results / collections / saved-search pages: every link to a property detail page.
-  function collectPropertyLinks() {
-    const out = new Set();
+  // ── Share / search / collection pages ────────────────────────
+  // e.g. https://portal.onehome.com/en-US/share/1145890F99332 → a list of the shared properties.
+  // Property URLs need the page's token/searchId to open, so they are carried over.
+  function pageAuthParams() {
+    const p = new URLSearchParams(location.search);
+    return { token: p.get('token'), searchId: p.get('searchId') };
+  }
+
+  function withAuth(href) {
+    const u = new URL(href, location.href);
+    const { token, searchId } = pageAuthParams();
+    if (token && !u.searchParams.get('token')) u.searchParams.set('token', token);
+    if (searchId && !u.searchParams.get('searchId')) u.searchParams.set('searchId', searchId);
+    return u.href;
+  }
+
+  function propertyUrl(id, osn) {
+    const lang = (location.pathname.match(/^\/([a-z]{2}-[A-Z]{2})\//) || [])[1] || 'en-US';
+    return withAuth(`${location.origin}/${lang}/property/aotf~${id}~${osn}`);
+  }
+
+  // Every property id on the page: real links first, then OneHome "aotf~<id>~<MLS>" ids found
+  // anywhere in the markup (router links, data attributes, image keys).
+  function harvestPropertyUrls() {
+    const out = new Map();
     document.querySelectorAll('a[href*="/property/"]').forEach(a => {
       try {
         const u = new URL(a.getAttribute('href'), location.href);
-        if (u.hostname === location.hostname && /\/property\//.test(u.pathname)) out.add(u.href);
+        if (u.hostname !== location.hostname || !/\/property\//.test(u.pathname)) return;
+        const key = (u.pathname.match(/aotf~[^/]+/i) || [u.pathname])[0];
+        if (!out.has(key)) out.set(key, withAuth(u.href));
       } catch (_) { /* bad href */ }
     });
-    return Array.from(out);
+    const html = document.documentElement.innerHTML;
+    for (const m of html.matchAll(/aotf(?:~|%7E)(\d{5,})(?:~|%7E)([A-Za-z0-9]+)/gi)) {
+      const key = `aotf~${m[1]}~${m[2]}`;
+      if (!out.has(key)) out.set(key, propertyUrl(m[1], m[2]));
+    }
+    return Array.from(out.values());
+  }
+
+  // Listing cards: the outermost element holding exactly one rent and a bed count.
+  function findCards() {
+    const priceRe = /\$\s?\d[\d,]{2,}/g;
+    const bedRe = /\b\d+\s*(bd|bds|beds?|br|bedrooms?)\b|\bstudio\b/i;
+    const cands = [];
+    document.querySelectorAll('a, div, li, article, section, mat-card, [class*="card"]').forEach(el => {
+      if (el.closest('#sor-scrape-fab')) return;
+      const t = el.innerText || '';
+      if (t.length < 15 || t.length > 900 || !bedRe.test(t)) return;
+      if ((t.match(priceRe) || []).length !== 1) return;
+      cands.push(el);
+    });
+    return cands.filter(el => !cands.some(o => o !== el && o.contains(el)));
+  }
+
+  function scrollEverything() {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    document.querySelectorAll('div, section, ul, main, mat-sidenav-content, cdk-virtual-scroll-viewport').forEach(el => {
+      if (el.scrollHeight > el.clientHeight + 40 && /auto|scroll/.test(getComputedStyle(el).overflowY)) el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  function clickLoadMore() {
+    const btn = Array.from(document.querySelectorAll('button, a')).find(b =>
+      /^(load|show|view|see) more( (results|homes|properties|listings))?$/i.test((b.textContent || '').trim()) && b.offsetParent !== null && !b.disabled);
+    if (btn) { btn.click(); return true; }
+    const next = Array.from(document.querySelectorAll('[aria-label*="next page" i], [class*="pagin"] button, [class*="pagin"] a'))
+      .find(b => /next/i.test(b.getAttribute('aria-label') || b.textContent || '') && !b.disabled && b.getAttribute('aria-disabled') !== 'true' && b.offsetParent !== null);
+    if (next) { next.click(); return true; }
+    return false;
+  }
+
+  async function waitFor(fn, ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (fn()) return true; await sleep(250); }
+    return false;
+  }
+
+  // Last resort when cards aren't links: click each card, note the property URL, go back.
+  async function clickThroughCards(deadline) {
+    const urls = [];
+    const total = findCards().length;
+    for (let i = 0; i < total && Date.now() < deadline; i++) {
+      const cards = findCards();
+      const card = cards[i];
+      if (!card) break;
+      const target = card.querySelector('a[href], img, h2, h3, [class*="address" i]') || card;
+      target.scrollIntoView({ block: 'center' });
+      target.click();
+      if (await waitFor(isPropertyPage, 8000)) {
+        urls.push(withAuth(location.href));
+        history.back();
+        await waitFor(() => !isPropertyPage() && findCards().length > i, 12000);
+        await sleep(500);
+      }
+    }
+    return Array.from(new Set(urls));
+  }
+
+  async function collectListPage(deadline) {
+    let last = -1;
+    let stable = 0;
+    for (let round = 0; round < 60 && Date.now() < deadline; round++) {
+      const n = harvestPropertyUrls().length + findCards().length * 1000;
+      if (n === last && n > 0) stable++; else { stable = 0; last = n; }
+      if (stable >= 3) break;
+      scrollEverything();
+      clickLoadMore();
+      await sleep(1200);
+    }
+    let urls = harvestPropertyUrls();
+    if (!urls.length && findCards().length) urls = await clickThroughCards(deadline);
+    return urls;
+  }
+
+  function diagnostics() {
+    const cards = findCards();
+    return {
+      url: location.origin + location.pathname,
+      title: document.title,
+      links: document.querySelectorAll('a').length,
+      propertyLinks: document.querySelectorAll('a[href*="/property/"]').length,
+      aotfIdsInPage: (document.documentElement.innerHTML.match(/aotf(?:~|%7E)\d{5,}/gi) || []).length,
+      cardsFound: cards.length,
+      dataQa: Array.from(new Set(Array.from(document.querySelectorAll('[data-qa]')).map(e => e.getAttribute('data-qa')))).slice(0, 80),
+      firstCard: (cards[0] ? cards[0].outerHTML : '').replace(/token=[^"&\s]+/g, 'token=…').slice(0, 4000),
+      pageText: (document.body.innerText || '').slice(0, 800),
+    };
   }
 
   // Background import: wait for OneHome's app to render, then hand back the data.
   async function extractForImport() {
-    const deadline = Date.now() + 45000;
-    let lastLinkCount = -1;
-    while (Date.now() < deadline) {
+    const started = Date.now();
+    while (Date.now() - started < 45000) {
       if (isPropertyPage() && document.querySelector('.mls, [data-qa="house-price"]')) {
         await sleep(1200); // let the photo carousel and feature sections finish rendering
         await expandDescription();
         const listing = extractListingData();
-        if (!listing.mlsNumber) return { success: false, error: 'Could not find the MLS number on this page.' };
+        if (!listing.mlsNumber) return { success: false, error: 'Could not find the MLS number on this page.', debug: diagnostics() };
         listing.sourceUrl = location.href;
         return { success: true, kind: 'property', listing, photos: extractPhotoUrls() };
       }
-      if (!isPropertyPage()) {
-        const links = collectPropertyLinks();
-        // Wait until the result list stops growing before returning it.
-        if (links.length && links.length === lastLinkCount) return { success: true, kind: 'list', links };
-        lastLinkCount = links.length;
+      if (!isPropertyPage() && (harvestPropertyUrls().length || findCards().length)) {
+        const links = await collectListPage(started + 6 * 60000);
+        if (links.length) return { success: true, kind: 'list', links };
+        return { success: false, error: 'Found the property list but could not open the properties. Use “Copy debug info” and send it over.', debug: diagnostics() };
       }
       await sleep(1500);
     }
-    if (/sign in|log in/i.test(document.body.innerText.slice(0, 3000))) {
-      return { success: false, error: 'OneHome is asking to sign in. Open the link once in Chrome, then import again.' };
+    if (/sign in|log in|create (an )?account/i.test((document.body.innerText || '').slice(0, 3000))) {
+      return { success: false, error: 'OneHome is asking to sign in. Open the link once in Chrome, then import again.', debug: diagnostics() };
     }
-    return { success: false, error: 'Timed out waiting for the OneHome page to load.' };
+    return { success: false, error: 'Timed out waiting for the OneHome page to load.', debug: diagnostics() };
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

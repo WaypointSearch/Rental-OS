@@ -82,6 +82,7 @@
       await local().remove(keys);
       const index = (await getIndex()).filter(x => x !== id);
       await local().set({ listing_index: index });
+      await SOR.store.removeFromQueue(id);
       const r = await local().get('_activeMLS');
       if (r._activeMLS === id) await local().remove('_activeMLS');
     },
@@ -94,8 +95,8 @@
         const keys = (await local().getKeys()).filter(k => /^(listing_|photo_)/.test(k) && k !== 'listing_index');
         if (keys.length) await local().remove(keys);
       }
-      await local().set({ listing_index: [] });
-      await local().remove(['_activeMLS', '_scrapeProgress']);
+      await local().set({ listing_index: [], _postQueue: [] });
+      await local().remove(['_activeMLS', '_scrapeProgress', '_clPostings']);
     },
 
     async getPhotos(id) {
@@ -120,6 +121,85 @@
       const l = await SOR.store.getListing(id);
       if (l) { l.photoCount = list.length; await SOR.store.saveListing(l); }
       return list.length;
+    },
+
+    // ── Posting queue ──────────────────────────────────────────
+    async getQueue() {
+      const r = await local().get('_postQueue');
+      return Array.isArray(r._postQueue) ? r._postQueue : [];
+    },
+
+    async setQueue(ids) {
+      const q = Array.from(new Set((ids || []).filter(Boolean)));
+      await local().set({ _postQueue: q });
+      return q;
+    },
+
+    async appendToQueue(ids) {
+      return SOR.store.setQueue((await SOR.store.getQueue()).concat(ids || []));
+    },
+
+    async removeFromQueue(id) {
+      const q = await SOR.store.getQueue();
+      if (q.includes(id)) await SOR.store.setQueue(q.filter(x => x !== id));
+    },
+
+    // Drops deleted listings and, when enabled, re-queues listings whose 48h repost wait is over.
+    async syncQueue(settings, listings) {
+      const s = settings || await SOR.store.loadSettings();
+      const all = listings || await SOR.store.getAllListings();
+      const byId = new Set(all.map(l => l.mlsNumber));
+      const before = await SOR.store.getQueue();
+      let q = before.filter(id => byId.has(id));
+      if (s.requeueAfter48h) {
+        const due = all
+          .filter(l => l.posted && l.posted.clPublishedAt && !l.needsAttention && !SOR.isRecentlyPosted(l) && !q.includes(l.mlsNumber))
+          .sort((a, b) => Date.parse(a.posted.clPublishedAt) - Date.parse(b.posted.clPublishedAt))
+          .map(l => l.mlsNumber);
+        q = q.concat(due);
+      }
+      if (q.length !== before.length || q.some((id, i) => id !== before[i])) await SOR.store.setQueue(q);
+      return q;
+    },
+
+    // First queued listing that may be posted now (not posted in the last 48h, not flagged).
+    nextPostable(queue, listings) {
+      return (queue || []).find(id => SOR.isPostable((listings || []).find(l => l.mlsNumber === id))) || '';
+    },
+
+    async markPublished(id) {
+      const l = await SOR.store.getListing(id);
+      if (!l) return null;
+      const prev = l.posted && typeof l.posted === 'object' ? l.posted : {};
+      const now = new Date().toISOString();
+      l.posted = Object.assign({}, prev, {
+        craigslist: true,
+        clPublishedAt: now,
+        clPublishCount: (prev.clPublishCount || 0) + 1,
+        clPublishLog: (prev.clPublishLog || []).concat(now).slice(-30),
+      });
+      delete l.needsAttention;
+      await SOR.store.saveListing(l);
+      await SOR.store.removeFromQueue(id);
+      return l;
+    },
+
+    async markNeedsAttention(id, reason) {
+      const l = await SOR.store.getListing(id);
+      if (!l) return null;
+      l.needsAttention = { reason: String(reason || 'Needs a look'), at: new Date().toISOString() };
+      await SOR.store.saveListing(l);
+      await SOR.store.removeFromQueue(id);
+      return l;
+    },
+
+    async clearNeedsAttention(id, requeue) {
+      const l = await SOR.store.getListing(id);
+      if (!l) return null;
+      delete l.needsAttention;
+      await SOR.store.saveListing(l);
+      if (requeue) await SOR.store.appendToQueue([id]);
+      return l;
     },
 
     async markFilled(id, info) {

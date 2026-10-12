@@ -3,7 +3,7 @@
   --sor-navy: #0a3d5c; --sor-teal: #0d6986; --sor-sky: #0f8aab; --sor-sun: #f5a623;
   --sor-ink: #10202e; --sor-muted: #5b6b79; --sor-line: #e2e8ee; --sor-bg: #ffffff;
   position: fixed; top: 72px; right: 16px; z-index: 2147483000;
-  width: 320px; max-height: calc(100vh - 96px); overflow: hidden auto;
+  width: 320px; max-height: calc(100vh - 190px); overflow: hidden auto;
   background: var(--sor-bg); color: var(--sor-ink);
   border: 1px solid var(--sor-line); border-radius: 14px;
   box-shadow: 0 12px 36px rgba(10, 61, 92, 0.22), 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -79,3 +79,21 @@
 
 .sor-missing { outline: 3px solid #ef4444 !important; outline-offset: 2px; border-radius: 4px; }
 #sor-cl-panel .sor-queue { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: #8a5a00; background: #fff3db; border: 1px solid #fde3a7; border-radius: 8px; padding: 6px 9px; }
+
+/* Fixed NEXT STEP button — always the same screen spot (bottom-right) for click macros. */
+#sor-next {
+  position: fixed; right: 20px; bottom: 20px; z-index: 2147483001;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none;
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#sor-next .sor-next-note {
+  pointer-events: auto; max-width: 280px; background: #10202e; color: #e6edf3; font-size: 12px;
+  padding: 6px 10px; border-radius: 8px; text-align: right; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+#sor-next button {
+  pointer-events: auto; width: 220px; height: 56px; border: none; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(135deg, #f5a623, #f08c00); color: #2b1a00; font: 800 16px/1 inherit; letter-spacing: 0.6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); margin: 0;
+}
+#sor-next button:hover:not(:disabled) { filter: brightness(1.05); }
+#sor-next button:disabled { opacity: 0.8; cursor: wait; }

@@ -45,3 +45,10 @@ body { width: 370px; max-height: 590px; overflow-y: auto; }
 .item .head input { margin-top: 1px; flex-shrink: 0; cursor: pointer; }
 .item .head .t { flex: 1; min-width: 0; }
 .post-btn { margin-top: 8px; }
+.queue-card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 6px; }
+.queue-card .big { font-weight: 700; color: var(--navy); }
+.queue-card .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.queue-card .row .grow { flex: 1; }
+.badge.q { background: #fff3db; color: #8a5a00; }
+.badge.warn { background: var(--bad-bg); color: var(--bad); }
+.imp .dbg { grid-column: 2; justify-self: start; font-size: 11px; }
