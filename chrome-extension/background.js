@@ -212,49 +212,106 @@ async function runImportQueue() {
     }
   } finally {
     importRunning = false;
+    await closeImportWindow();
     stopKeepAlive();
   }
 }
 
-async function importOne(item) {
-  const tab = await chrome.tabs.create({ url: item.url, active: false });
+// Imports run in ONE small, visible OneHome window. Chrome barely renders hidden background tabs,
+// and OneHome's property list/photo carousel don't appear there, so the window must stay visible.
+let importWin = null; // { windowId, tabId }
+
+async function openInImportWindow(url) {
+  if (importWin) {
+    try {
+      const nav = waitForNavigation(importWin.tabId, IMPORT_TIMEOUT);
+      await chrome.tabs.update(importWin.tabId, { url });
+      await nav;
+      return importWin.tabId;
+    } catch (e) {
+      if (!/closed|No tab/i.test(e.message)) throw e;
+      importWin = null; // user closed it — open a fresh one
+    }
+  }
+  const w = await createImportWindow();
+  importWin = { windowId: w.id, tabId: w.tabs[0].id };
+  const nav = waitForNavigation(importWin.tabId, IMPORT_TIMEOUT);
+  await chrome.tabs.update(importWin.tabId, { url });
+  await nav;
+  return importWin.tabId;
+}
+
+// Size the window from the browser window the user is in, so it always fits their screen.
+async function createImportWindow() {
+  const opts = { url: 'about:blank', type: 'popup', focused: true };
   try {
-    await waitForTabLoaded(tab.id, IMPORT_TIMEOUT);
-    await updateImport(item.id, { msg: 'Reading listing…' });
-    const res = await sendToTab(tab.id, { action: 'EXTRACT_FOR_IMPORT' }, IMPORT_TIMEOUT);
-    if (!res || !res.success) {
-      if (res && res.debug) await updateImport(item.id, { debug: JSON.stringify(res.debug, null, 2) });
-      throw new Error((res && res.error) || 'Could not read this OneHome page.');
+    const cur = await chrome.windows.getLastFocused();
+    if (cur && cur.width && cur.height) {
+      Object.assign(opts, {
+        width: Math.max(600, Math.min(1180, cur.width - 40)),
+        height: Math.max(500, Math.min(860, cur.height - 40)),
+        left: (cur.left || 0) + 20,
+        top: (cur.top || 0) + 20,
+      });
     }
-    if (res.kind === 'list') {
-      await chrome.tabs.remove(tab.id).catch(() => {});
-      if (!res.links.length) throw new Error('No properties found on this OneHome page.');
-      await updateImport(item.id, { status: 'done', msg: `Found ${res.links.length} properties — importing each` });
-      await queueImports(res.links.join('\n'), 'from search');
-      return;
-    }
-    const listing = res.listing;
-    if (!listing.sourceUrl || !/token=/.test(listing.sourceUrl)) listing.sourceUrl = item.url;
-    await updateImport(item.id, { msg: `Saving ${res.photos.length} photos…`, mls: listing.mlsNumber });
-    await chrome.tabs.remove(tab.id).catch(() => {});
-    await handleScrape(listing, res.photos);
-    const saved = await SOR.store.getListing(listing.mlsNumber);
-    const settings = await SOR.store.loadSettings();
-    if (settings.autoQueue && saved && SOR.isPostable(saved)) await SOR.store.appendToQueue([saved.mlsNumber]);
-    await updateImport(item.id, {
-      status: 'done', mls: listing.mlsNumber,
-      label: SOR.listingLabel(saved || listing), msg: `${(saved && saved.photoCount) || 0} photos`,
-    });
-  } finally {
-    chrome.tabs.remove(tab.id).catch(() => {});
+    return await chrome.windows.create(opts);
+  } catch (_) {
+    return chrome.windows.create({ url: 'about:blank', type: 'popup', focused: true });
   }
 }
 
-function waitForTabLoaded(tabId, timeout) {
+async function closeImportWindow() {
+  if (!importWin) return;
+  const id = importWin.windowId;
+  importWin = null;
+  await chrome.windows.remove(id).catch(() => {});
+}
+
+async function importOne(item) {
+  const tabId = await openInImportWindow(item.url);
+  await updateImport(item.id, { msg: 'Reading OneHome page…' });
+  let res = await sendToTab(tabId, { action: 'EXTRACT_FOR_IMPORT' }, IMPORT_TIMEOUT);
+  if (res && !res.success && res.retryVisible && importWin) {
+    // Page didn't render (window hidden behind others?) — bring it forward and try once more.
+    await chrome.windows.update(importWin.windowId, { focused: true, state: 'normal' }).catch(() => {});
+    await sleep(1500);
+    res = await sendToTab(tabId, { action: 'EXTRACT_FOR_IMPORT' }, IMPORT_TIMEOUT);
+  }
+  if (!res || !res.success) {
+    if (res && res.debug) await updateImport(item.id, { debug: JSON.stringify(res.debug, null, 2) });
+    throw new Error((res && res.error) || 'Could not read this OneHome page.');
+  }
+  if (res.kind === 'list') {
+    if (!res.links.length) throw new Error('No properties found on this OneHome page.');
+    await updateImport(item.id, { status: 'done', msg: `Found ${res.links.length} properties — importing each` });
+    await queueImports(res.links.join('\n'), 'from share link');
+    return;
+  }
+  const listing = res.listing;
+  if (!listing.sourceUrl || !/token=/.test(listing.sourceUrl)) listing.sourceUrl = item.url;
+  await updateImport(item.id, { msg: `Saving ${res.photos.length} photos…`, mls: listing.mlsNumber });
+  await handleScrape(listing, res.photos);
+  const saved = await SOR.store.getListing(listing.mlsNumber);
+  const settings = await SOR.store.loadSettings();
+  if (settings.autoQueue && saved && SOR.isPostable(saved)) await SOR.store.appendToQueue([saved.mlsNumber]);
+  await updateImport(item.id, {
+    status: 'done', mls: listing.mlsNumber,
+    label: SOR.listingLabel(saved || listing), msg: `${(saved && saved.photoCount) || 0} photos`,
+  });
+}
+
+// Resolves once the tab has started AND finished loading a new document (avoids reading the
+// previous page while the next one is still on its way).
+function waitForNavigation(tabId, timeout) {
   return new Promise((resolve, reject) => {
+    let sawLoading = false;
     const timer = setTimeout(() => { cleanup(); reject(new Error('OneHome took too long to load.')); }, timeout);
-    const onUpdated = (id, info) => { if (id === tabId && info.status === 'complete') { cleanup(); resolve(); } };
-    const onRemoved = (id) => { if (id === tabId) { cleanup(); reject(new Error('The import tab was closed.')); } };
+    const onUpdated = (id, info) => {
+      if (id !== tabId) return;
+      if (info.status === 'loading') sawLoading = true;
+      if (info.status === 'complete' && sawLoading) { cleanup(); resolve(); }
+    };
+    const onRemoved = (id) => { if (id === tabId) { cleanup(); reject(new Error('The OneHome import window was closed.')); } };
     function cleanup() {
       clearTimeout(timer);
       chrome.tabs.onUpdated.removeListener(onUpdated);
@@ -262,7 +319,6 @@ function waitForTabLoaded(tabId, timeout) {
     }
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
-    chrome.tabs.get(tabId).then(t => { if (t.status === 'complete') { cleanup(); resolve(); } }).catch(() => {});
   });
 }
 

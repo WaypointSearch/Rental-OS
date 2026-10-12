@@ -222,6 +222,52 @@
     return u.href;
   }
 
+  // OneHome share/search tokens are base64 JSON that include the MLS source code (e.g. "OSN":"BEACH").
+  function pageOsn() {
+    const tryToken = (t) => {
+      try { const j = JSON.parse(atob(decodeURIComponent(t))); return j.OSN || j.osn || ''; } catch (_) { return ''; }
+    };
+    const fromUrl = tryToken(pageAuthParams().token || '');
+    if (fromUrl) return fromUrl;
+    for (const store of [sessionStorage, localStorage]) {
+      try {
+        for (let i = 0; i < store.length; i++) {
+          const v = store.getItem(store.key(i)) || '';
+          const m = v.match(/"OSN"\s*:\s*"([A-Za-z0-9]+)"/);
+          if (m) return m[1];
+        }
+      } catch (_) { /* storage blocked */ }
+    }
+    return '';
+  }
+
+  // Property ids seen in OneHome's own API responses (collected by onehome-net.js in the page).
+  let net = { aotf: [], generic: [], samples: [] };
+  function refreshNet() {
+    return new Promise((resolve) => {
+      const done = (data) => { window.removeEventListener('message', onMsg); if (data) net = data; resolve(net); };
+      const onMsg = (e) => { if (e.source === window && e.data && e.data.__sorNetRes === 1) done(e.data); };
+      window.addEventListener('message', onMsg);
+      window.postMessage({ __sorNetReq: 1 }, '*');
+      setTimeout(() => done(null), 800);
+    });
+  }
+
+  // Exact OneHome property ids ("aotf~123~BEACH") seen in the data feed.
+  function netUrls() {
+    return net.aotf.map(x => { const [, id, osn] = x.split('~'); return propertyUrl(id, osn); });
+  }
+
+  // Best guess from listing-shaped records in the feed (id + price + address). Used last.
+  function guessedNetUrls() {
+    const osn = pageOsn();
+    return net.generic.map(g => {
+      if (/^aotf~/i.test(g.id)) { const [, id, o] = g.id.split('~'); return propertyUrl(id, o); }
+      const o = g.osn || osn;
+      return /^\d{5,}$/.test(g.id) && o ? propertyUrl(g.id, o) : null;
+    }).filter(Boolean);
+  }
+
   function propertyUrl(id, osn) {
     const lang = (location.pathname.match(/^\/([a-z]{2}-[A-Z]{2})\//) || [])[1] || 'en-US';
     return withAuth(`${location.origin}/${lang}/property/aotf~${id}~${osn}`);
@@ -244,6 +290,10 @@
       const key = `aotf~${m[1]}~${m[2]}`;
       if (!out.has(key)) out.set(key, propertyUrl(m[1], m[2]));
     }
+    netUrls().forEach(u => {
+      const key = (new URL(u).pathname.match(/aotf~[^/]+/i) || [u])[0];
+      if (!out.has(key)) out.set(key, u);
+    });
     return Array.from(out.values());
   }
 
@@ -306,19 +356,43 @@
     return Array.from(new Set(urls));
   }
 
+  // OneHome's map view can have the property list closed ("Toggle properties list").
+  const LIST_TOGGLES = ['[data-qa="show-or-hide-properties"]', '[aria-label*="properties list" i]', '[data-qa*="list-view" i]',
+    'button[aria-label*="list view" i]', '[data-qa="toggle-list"]'];
+  async function revealList() {
+    const found = () => harvestPropertyUrls().length || findCards().length;
+    if (found()) return true;
+    for (const sel of LIST_TOGGLES) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const target = el.matches('button, a, [role="button"]') ? el : (el.querySelector('button, a, [role="button"]') || el);
+      for (let i = 0; i < 2; i++) {
+        target.click();
+        if (await waitFor(found, 6000)) return true;
+      }
+    }
+    return false;
+  }
+
   async function collectListPage(deadline) {
     let last = -1;
     let stable = 0;
     for (let round = 0; round < 60 && Date.now() < deadline; round++) {
+      await refreshNet();
+      if (round === 0 || (last <= 0 && (round === 3 || round === 8))) await revealList();
       const n = harvestPropertyUrls().length + findCards().length * 1000;
+      // List never appeared but the data feed has the properties: stop waiting.
+      if (n === 0 && round >= 8 && guessedNetUrls().length) break;
       if (n === last && n > 0) stable++; else { stable = 0; last = n; }
       if (stable >= 3) break;
       scrollEverything();
       clickLoadMore();
       await sleep(1200);
     }
+    await refreshNet();
     let urls = harvestPropertyUrls();
     if (!urls.length && findCards().length) urls = await clickThroughCards(deadline);
+    if (!urls.length) urls = guessedNetUrls();
     return urls;
   }
 
@@ -334,32 +408,47 @@
       dataQa: Array.from(new Set(Array.from(document.querySelectorAll('[data-qa]')).map(e => e.getAttribute('data-qa')))).slice(0, 80),
       firstCard: (cards[0] ? cards[0].outerHTML : '').replace(/token=[^"&\s]+/g, 'token=…').slice(0, 4000),
       pageText: (document.body.innerText || '').slice(0, 800),
+      visibility: document.visibilityState,
+      queryKeys: Array.from(new URLSearchParams(location.search).keys()),
+      osn: pageOsn(),
+      buttons: Array.from(document.querySelectorAll('button, [role="button"], a')).filter(b => b.offsetParent !== null)
+        .map(b => (b.getAttribute('aria-label') || b.getAttribute('data-qa') || b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50))
+        .filter(Boolean).slice(0, 60),
+      net: { aotfIds: net.aotf.length, listingLikeObjects: net.generic.length, sampleGeneric: net.generic.slice(0, 5), responses: net.samples },
     };
   }
 
-  // Background import: wait for OneHome's app to render, then hand back the data.
+  // Import: wait for OneHome's app to render, then hand back the data.
   async function extractForImport() {
     const started = Date.now();
+    const fail = (error) => ({ success: false, error, debug: diagnostics(), retryVisible: document.visibilityState === 'hidden' });
+    // Property page, or a share/search/map page that lists several properties?
     while (Date.now() - started < 45000) {
-      if (isPropertyPage() && document.querySelector('.mls, [data-qa="house-price"]')) {
-        await sleep(1200); // let the photo carousel and feature sections finish rendering
-        await expandDescription();
-        const listing = extractListingData();
-        if (!listing.mlsNumber) return { success: false, error: 'Could not find the MLS number on this page.', debug: diagnostics() };
-        listing.sourceUrl = location.href;
-        return { success: true, kind: 'property', listing, photos: extractPhotoUrls() };
+      if (isPropertyPage()) {
+        if (document.querySelector('.mls, [data-qa="house-price"]')) {
+          await sleep(1200); // let the photo carousel and feature sections finish rendering
+          await expandDescription();
+          const listing = extractListingData();
+          if (!listing.mlsNumber) return fail('Could not find the MLS number on this page.');
+          listing.sourceUrl = location.href;
+          return { success: true, kind: 'property', listing, photos: extractPhotoUrls() };
+        }
+      } else if (!/\/share\//.test(location.pathname) && (Date.now() - started > 6000 || harvestPropertyUrls().length || findCards().length)) {
+        break;
       }
-      if (!isPropertyPage() && (harvestPropertyUrls().length || findCards().length)) {
-        const links = await collectListPage(started + 6 * 60000);
-        if (links.length) return { success: true, kind: 'list', links };
-        return { success: false, error: 'Found the property list but could not open the properties. Use “Copy debug info” and send it over.', debug: diagnostics() };
-      }
-      await sleep(1500);
+      await sleep(1000);
     }
-    if (/sign in|log in|create (an )?account/i.test((document.body.innerText || '').slice(0, 3000))) {
-      return { success: false, error: 'OneHome is asking to sign in. Open the link once in Chrome, then import again.', debug: diagnostics() };
+    if (isPropertyPage()) return fail('The OneHome property page never finished loading.');
+    if (/\/share\//.test(location.pathname)) return fail('The OneHome share link didn’t open a property list (expired or needs sign-in?).');
+
+    await refreshNet();
+    const links = await collectListPage(started + 6 * 60000);
+    if (links.length) return { success: true, kind: 'list', links };
+    await refreshNet();
+    if (/sign in|log in|create (an )?account/i.test((document.body.innerText || '').slice(0, 400)) && !findCards().length) {
+      return fail('OneHome is asking to sign in. Open the link once in Chrome, then import again.');
     }
-    return { success: false, error: 'Timed out waiting for the OneHome page to load.', debug: diagnostics() };
+    return fail('Opened the OneHome page but couldn’t find the properties. Use “Copy debug info” and send it over.');
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

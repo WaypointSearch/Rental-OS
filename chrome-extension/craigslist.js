@@ -69,10 +69,10 @@
 
   async function refreshData() {
     state.settings = await SOR.store.loadSettings();
-    state.listings = await SOR.store.getAllListings();
+    state.queue = await SOR.store.syncQueue(state.settings);
+    state.listings = await SOR.store.getAllListings(); // read after the queue so it's never older
     const r = await chrome.storage.local.get(['_activeMLS', '_clPostings']);
     const has = (id) => !!id && state.listings.some(l => l.mlsNumber === id);
-    state.queue = await SOR.store.syncQueue(state.settings, state.listings);
     state.nextId = SOR.store.nextPostable(state.queue, state.listings);
     state.postsToday = SOR.postsToday(state.listings);
     const bound = boundMls((r._clPostings || {})[postingId()]);

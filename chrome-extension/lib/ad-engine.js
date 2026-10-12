@@ -9,7 +9,7 @@
 
   const SOR = root.SOR = root.SOR || {};
 
-  SOR.VERSION = '4.1.0';
+  SOR.VERSION = '4.2.0';
   SOR.TITLE_MAX = 70;        // Craigslist PostingTitle maxlength (UTF-16 units, emoji count as 2+)
   SOR.MAX_PHOTOS = 24;       // Craigslist housing image limit
   SOR.SETTINGS_KEY = 'sor_settings';

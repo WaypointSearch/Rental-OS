@@ -15,10 +15,14 @@ The Facebook tools from v3 are gone; this is a OneHome → Craigslist tool only.
 
 1. **Add listings**
    - Paste one or more OneHome links into the popup and click **Import listings + photos**.
-     Each link opens in a background tab, gets scraped (data + every photo), and closes.
+     A small OneHome window opens, reads each page (data + every photo) and closes itself when
+     the batch is done. Leave it open while it works: Chrome doesn't fully draw hidden tabs, and
+     OneHome's lists and photo carousels need to be drawn.
      A share link (`https://portal.onehome.com/en-US/share/…`), search or collection page imports
-     every property on it: the list is scrolled to load everything, and if the cards aren't links
-     each one is opened to read its address. If a page can't be read, the import row shows
+     every property on it. Share links open OneHome's map view: the importer opens the
+     "properties list" if it's closed, scrolls it to load everything, reads property ids from the
+     links and from OneHome's own data feed, and if the cards aren't links it opens each one to
+     read its address. If a page can't be read, the import row shows
      **Copy debug info**; send that text to whoever maintains the extension.
    - Or open a OneHome property page and click the floating **Scrape** button.
    - Or click **+ By-owner** to type in a listing that isn't on the MLS and upload its photos.
@@ -120,6 +124,7 @@ filler keeps working if Craigslist renames its form fields.
 | `background.js` | Photo downloads, link-import queue, OpenAI calls, Craigslist widget refresh |
 | `lib/ad-engine.js` | Listing analysis, titles, descriptions, Craigslist fill plan (pure functions) |
 | `lib/store.js` | Listings, photos and settings in `chrome.storage.local` |
-| `content-onehome.js` | OneHome scraper (floating button, background import, share/search pages) |
+| `content-onehome.js` | OneHome scraper (floating button, import, share/search/map pages) |
+| `onehome-net.js` | Runs inside OneHome pages and reads property ids from OneHome's data feed (read-only) |
 | `craigslist.js` | Craigslist step-by-step assistant panel, posting queue and NEXT STEP engine |
 | `popup.*`, `editor.*`, `options.*`, `ui.css` | Extension pages |

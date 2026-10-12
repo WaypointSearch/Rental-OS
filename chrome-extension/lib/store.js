@@ -145,21 +145,24 @@
     },
 
     // Drops deleted listings and, when enabled, re-queues listings whose 48h repost wait is over.
-    async syncQueue(settings, listings) {
+    // Existence is checked straight from storage (never from a cached listing list) and the queue is
+    // re-read right before writing, so a listing appended by an import isn't dropped by another tab.
+    async syncQueue(settings) {
       const s = settings || await SOR.store.loadSettings();
-      const all = listings || await SOR.store.getAllListings();
-      const byId = new Set(all.map(l => l.mlsNumber));
-      const before = await SOR.store.getQueue();
-      let q = before.filter(id => byId.has(id));
+      const q = await SOR.store.getQueue();
+      const have = q.length ? await local().get(q.map(listingKey)) : {};
+      const missing = q.filter(id => !have[listingKey(id)]);
+      let due = [];
       if (s.requeueAfter48h) {
-        const due = all
+        due = (await SOR.store.getAllListings())
           .filter(l => l.posted && l.posted.clPublishedAt && !l.needsAttention && !SOR.isRecentlyPosted(l) && !q.includes(l.mlsNumber))
           .sort((a, b) => Date.parse(a.posted.clPublishedAt) - Date.parse(b.posted.clPublishedAt))
           .map(l => l.mlsNumber);
-        q = q.concat(due);
       }
-      if (q.length !== before.length || q.some((id, i) => id !== before[i])) await SOR.store.setQueue(q);
-      return q;
+      if (!missing.length && !due.length) return q;
+      const fresh = await SOR.store.getQueue();
+      const next = fresh.filter(id => !missing.includes(id)).concat(due.filter(id => !fresh.includes(id)));
+      return SOR.store.setQueue(next);
     },
 
     // First queued listing that may be posted now (not posted in the last 48h, not flagged).

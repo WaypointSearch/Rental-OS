@@ -97,7 +97,7 @@ async function renderQueue() {
   const listings = await SOR.store.getAllListings();
   const box = $('#queue');
   if (!listings.length) { box.innerHTML = ''; return; }
-  const q = await SOR.store.syncQueue(settings, listings);
+  const q = await SOR.store.syncQueue(settings);
   const ready = q.filter(id => SOR.isPostable(listings.find(l => l.mlsNumber === id)));
   const next = listings.find(l => l.mlsNumber === ready[0]);
   const today = SOR.postsToday(listings);
