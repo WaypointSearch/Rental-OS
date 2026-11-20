@@ -1,6 +1,6 @@
 # Waypoint Search Group — website
 
-The website for [waypointsearch.com](https://waypointsearch.com): Waypoint Search Group, AEC recruitment, 700 S. Rosemary Ave, Suite 204, West Palm Beach, FL 33401 · (212) 347-0057 · info@waypointsearch.com.
+The website for [waypointsearch.com](https://waypointsearch.com): Waypoint Search Group, AEC recruitment, 407 Lincoln Road, Suite 6H #1376, Miami Beach, FL 33139 · (212) 347-0057 · info@waypointsearch.com.
 
 It is a plain static site (HTML, CSS and a little JavaScript) with no build step, database or server code.
 
