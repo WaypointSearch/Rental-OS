@@ -21,7 +21,7 @@ It is a plain static site (HTML, CSS and a little JavaScript) with no build step
 | `thanks.html`, `404.html`, `privacy.html` | Form thank-you page, not-found page, privacy policy |
 | `assets/` | Styles, scripts, logo, icons and social-share image |
 | `_redirects`, `_headers` | Cloudflare Pages settings: old-URL redirects and security headers |
-| `vercel.json` | Only used if you ever host on Vercel instead |
+| `vercel.json` | The same settings for Vercel: clean URLs, old-URL redirects and security headers |
 | `brand/` | Brand kit (logos and LinkedIn images). Not part of the website upload. |
 | `docs/` | Competitive research. Not part of the website upload. |
 

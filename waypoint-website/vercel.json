@@ -2,10 +2,157 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
-    { "source": "/news/:path*", "destination": "/insights", "permanent": true },
-    { "source": "/about-us", "destination": "/about", "permanent": true },
-    { "source": "/contact-us", "destination": "/contact", "permanent": true },
-    { "source": "/candidates/:path*", "destination": "/jobs", "permanent": true },
-    { "source": "/clients/:path*", "destination": "/employers", "permanent": true }
+    {
+      "source": "/news",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/news/:path*",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/blog",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/blog/:path*",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/resources",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/resources/:path*",
+      "destination": "/insights",
+      "permanent": true
+    },
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/about-us",
+      "destination": "/about",
+      "permanent": true
+    },
+    {
+      "source": "/our-team",
+      "destination": "/about",
+      "permanent": true
+    },
+    {
+      "source": "/team",
+      "destination": "/about",
+      "permanent": true
+    },
+    {
+      "source": "/contact-us",
+      "destination": "/contact",
+      "permanent": true
+    },
+    {
+      "source": "/clients",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/clients/:path*",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/hire",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/hire-talent",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/services",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/services/:path*",
+      "destination": "/employers",
+      "permanent": true
+    },
+    {
+      "source": "/candidates",
+      "destination": "/jobs",
+      "permanent": true
+    },
+    {
+      "source": "/candidates/:path*",
+      "destination": "/jobs",
+      "permanent": true
+    },
+    {
+      "source": "/job-seekers",
+      "destination": "/jobs",
+      "permanent": true
+    },
+    {
+      "source": "/job-board",
+      "destination": "/jobs",
+      "permanent": true
+    },
+    {
+      "source": "/open-positions",
+      "destination": "/jobs",
+      "permanent": true
+    },
+    {
+      "source": "/submit-resume",
+      "destination": "/jobs#apply",
+      "permanent": true
+    },
+    {
+      "source": "/privacy-policy",
+      "destination": "/privacy",
+      "permanent": true
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    }
   ]
 }

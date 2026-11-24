@@ -1,6 +1,28 @@
-# Launch waypointsearch.com tonight
+# Launch waypointsearch.com
 
-The site is hosted on **Cloudflare**, which is free and includes SSL and a global CDN. You'll upload one zip file and change your nameservers. Expect about 30 minutes of clicking, plus a wait while the nameserver change spreads (usually under an hour, sometimes longer).
+## Already live on Vercel? Start here
+
+If waypointsearch.com is already served by a Vercel project, you don't need Cloudflare or any nameserver changes. Connect that Vercel project to GitHub once, and every update is published automatically from then on.
+
+**1. Find the project (2 min).** Log in at [vercel.com](https://vercel.com) with the account that hosts the Compass CRM. Open the project whose card shows **waypointsearch.com**. If no project shows it, check your other Vercel teams. If it isn't on Vercel at all, use the Cloudflare guide below instead.
+
+**2. Connect it to GitHub (5 min).** In that project's **Settings**:
+
+- **Git**: connect the repository **WaypointSearch/Rental-OS**.
+- **Build and Deployment** (on older screens, **General**): set **Framework Preset** to *Other* and **Root Directory** to `waypoint-website`. Leave the build and output settings empty.
+- **Environments → Production** (on older screens, **Git → Production Branch**): set the branch to `claude/sleepy-gauss-0572vf`.
+
+**3. Publish (1 min).** Under **Deployments**, deploy the latest commit of `claude/sleepy-gauss-0572vf` to Production. Then reload waypointsearch.com. The footer should show **info@waypointsearch.com** and the **Miami Beach** address.
+
+**4. Re-activate the forms.** Do step 5 at the end of the Cloudflare guide below, "Turn on the forms". The form address changed to info@, so FormSubmit asks for one new activation email to be clicked.
+
+From now on, don't upload site files to Vercel by hand. Edits made that way skip GitHub and get overwritten by the next update.
+
+---
+
+## Not hosted yet? Use Cloudflare
+
+This option hosts the site on **Cloudflare**, which is free and includes SSL and a global CDN. You'll upload one zip file and change your nameservers. Expect about 30 minutes of clicking, plus a wait while the nameserver change spreads (usually under an hour, sometimes longer).
 
 You need:
 
